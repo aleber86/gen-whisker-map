@@ -37,18 +37,25 @@ _In which devices can it run?_ In every OpenCL compliant device, but there's a c
   
 ## Mathematical Background
 To study Arnold's diffusion (Arnold, 1964), Chirikov (1979) propose the map that describes de dynamical system,
-```math
-y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\\\
-t = t - \lambda_{1}\log{|y'|} + \tilde\eta,\quad  t\mod{2\pi},\\\\
+
+$$
+\begin{align*}
+y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\
+t = t - \lambda_{1}\log{|y'|} + \tilde\eta,\quad  t\mod{2\pi},\\
 x = x -\lambda_{2}\log{|y'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
-```
+\end{align*}
+$$
+
 when $\omega_{2}>1$ and $\upsilon \ll 1$, if we multiply the first equation of the system by $\lambda_{1}$, we get $\xi =\lambda_{1}\cdot y$ and re-arrange the other equations to get,
 
-```math
+$$
+\begin{align*}
 \xi' = \xi + \sin{t} - \upsilon\cos{x},\\\\
 t = t - \lambda_{1}\log{|\xi'|} + \tilde\eta,\quad  t\mod{2\pi},\\\\
 x = x -\lambda_{2}\log{|\xi'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
-```
+\end{align*}
+$$
+
 where $\tilde\eta$ absorbs the constant values that emerges from the sustitution. By looking the first equation, if $\upsilon \to 0$, we will find the whisker map for the perturbed separatrix of the pendulum model.
 
 
@@ -93,7 +100,9 @@ I would like to thank the director of this work, PhD Pablo M. Cincotta, for havi
 
 ## References
 Chirikov, B. V. (1979). A universal instability of many-dimensional oscillator systems. Physics Reports, 52(5):263–379.
+
 Arnold, V. I. (1964). On the instability of dynamic systems with many degrees of freedom. Dokl. Akad, Nauk SSSR.
+
 Cincotta, P. y Giordano, C. (2016). Theory and applications of the Mean Exponential Growth factor of Nearby Orbits (MEGNO) method. Lecture Notes in Physics, 915:93–128.
 
 > Written with [StackEdit](https://stackedit.io/).
