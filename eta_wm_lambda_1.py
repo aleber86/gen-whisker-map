@@ -11,14 +11,14 @@ _random_seed = 34567890
 np.random.seed(_random_seed)
 _pi = 4.0*np.arctan(1.0)
 _max_iter = 10**7
-_dim_essamble = 64
+_dim_essamble = 128
 _dim_eta = 1
 _omega_2_range = 1
-_lambda_1_range = 512
+_lambda_1_range = 1536
 _g_size_0 = _dim_essamble
 _g_size_1 = _dim_eta
 _g_size_2 = _lambda_1_range
-_local = (4,1,4)
+_local = (8,1,4)
 _wp = np.float64
 _wpi = np.int32
 _step = 0.01

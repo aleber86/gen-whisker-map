@@ -35,14 +35,22 @@ G --> H[/Save to file/]
 _In which devices can it run?_ In every OpenCL compliant device, but there's a caveat, it has intensive computation with a bulk of data, so it is expected to be run in a GPGPU or in the best of cases in a HPC device.  
   
   
-## Mathematical Background  
-
-Ecuation that describes de dynamical system,
+## Mathematical Background
+To study Arnold's diffusion (Arnold, 1964), Chirikov (1979) propose the map that describes de dynamical system,
 ```math
-y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\
-t = t - \lambda_{1}\log{|y'|} + \tilde\eta,\quad  t\mod{2\pi},\\
+y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\\\
+t = t - \lambda_{1}\log{|y'|} + \tilde\eta,\quad  t\mod{2\pi},\\\\
 x = x -\lambda_{2}\log{|y'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
 ```
+when $\omega_{2}>1$ and $\upsilon \ll 1$, if we multiply the first equation of the system by $\lambda_{1}$, we get $\xi =\lambda_{1}\cdot y$ and re-arrange the other equations to get,
+
+```math
+\xi' = \xi + \sin{t} - \upsilon\cos{x},\\\\
+t = t - \lambda_{1}\log{|\xi'|} + \tilde\eta,\quad  t\mod{2\pi},\\\\
+x = x -\lambda_{2}\log{|\xi'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
+```
+where $\tilde\eta$ absorbs the constant values that emerges from the sustitution. By looking the first equation, if $\upsilon \to 0$, we will find the whisker map for the perturbed separatrix of the pendulum model.
+
 
 ## Requisits
 
@@ -52,6 +60,23 @@ In order to get this program working, you will need to install OpenCL ICD for yo
 pip install numpy pyopencl
 ```
 
+## How do I use this code?
+For $\eta$ non-fixed, you need to execute the script 
+```
+python wm_eta_finder.py
+```
+then you will get an auxiliary file in *data* folder. Then, you need to copy this file to the main folder, change the name of this file to match 'aux_pre_cached.dat' and then execute,
+
+```
+python eta_wm_lambda_1.py
+```
+you will get another auxiliary file on *data* folder. With it, again, copy back to main folder and change the name to 'aux.dat'. Lastly, execute
+
+```
+python porosity.py
+```
+
+Inside every Python script there is some guide, and if you want to chage the name files, for now, you have to do it inside the scripts.
 
 ## TODO List
 Nowadays we are working on improving the readability of the code so we are in the stage of **housekeeping**. Much of the enviroment variables are hardwire into the code.
@@ -63,6 +88,12 @@ Nowadays we are working on improving the readability of the code so we are in th
 - [ ] Improve memory access.
 - [ ] Output files from plain text to binary.
 
+## Acknowledgments
+I would like to thank the director of this work, PhD Pablo M. Cincotta, for having guided me throughout the development process of this work, in addition to providing me with his FORTRAN code for calculating the chaos estimator, MEGNO, which I then parallelized using OpenCL. 
 
+## References
+Chirikov, B. V. (1979). A universal instability of many-dimensional oscillator systems. Physics Reports, 52(5):263–379.
+Arnold, V. I. (1964). On the instability of dynamic systems with many degrees of freedom. Dokl. Akad, Nauk SSSR.
+Cincotta, P. y Giordano, C. (2016). Theory and applications of the Mean Exponential Growth factor of Nearby Orbits (MEGNO) method. Lecture Notes in Physics, 915:93–128.
 
 > Written with [StackEdit](https://stackedit.io/).

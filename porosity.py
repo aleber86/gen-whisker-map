@@ -23,7 +23,7 @@ _pi = 4.0*np.arctan(1.0)
 _max_iter = _wpui(10**_it_step)
 _dim_essamble = _wpui(128)
 _omega_2_range = _wpui(1)
-_lambda_1_range = _wpui(1536)
+_lambda_1_range = _wpui(512)
 _lambda_1_range_map_out = _wpui(1)
 _common_gid_2_size = 128
 _save_maps = False
@@ -97,7 +97,7 @@ half_list = []
 
 all_readed = [lambda_1_list, lambda_2_list, omega_2_list, mu_list, eta_list, v_list, half_list]
 
-with open('pre_cached_gwm_omega_2_2.5_128_elements.dat', 'r') as file:
+with open('aux.dat', 'r') as file:
     status = True
     while status:
         line = file.readline().split()
