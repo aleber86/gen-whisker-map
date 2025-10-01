@@ -40,9 +40,9 @@ To study Arnold's diffusion (Arnold, 1964), Chirikov (1979) propose the map that
 
 $$
 \begin{align*}
-y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\
-t = t - \lambda_{1}\log{|y'|} + \tilde\eta,\quad  t\mod{2\pi},\\
-x = x -\lambda_{2}\log{|y'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
+&y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\
+&t = t - \lambda_{1}\log{|y'|} + \tilde\eta,\quad  t\mod{2\pi},\\
+&x = x -\lambda_{2}\log{|y'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
 \end{align*}
 $$
 
@@ -50,9 +50,9 @@ when $\omega_{2}>1$ and $\upsilon \ll 1$, if we multiply the first equation of t
 
 $$
 \begin{align*}
-\xi' = \xi + \sin{t} - \upsilon\cos{x},\\\\
-t = t - \lambda_{1}\log{|\xi'|} + \tilde\eta,\quad  t\mod{2\pi},\\\\
-x = x -\lambda_{2}\log{|\xi'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
+&\xi' = \xi + \sin{t} - \upsilon\cos{x},\\\\
+&t = t - \lambda_{1}\log{|\xi'|} + \tilde\eta,\quad  t\mod{2\pi},\\\\
+&x = x -\lambda_{2}\log{|\xi'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
 \end{align*}
 $$
 
