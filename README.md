@@ -26,11 +26,9 @@ At host side, we use Python (NumPy) to get the maximum and minimum value of arra
 ## Mathematical Background  
 
 Equation that describes the dynamical system,
-$$
-y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\
+$y' = y + \frac{1}{\lambda_{1}}\sin{t} - \frac{\upsilon}{\lambda_{1}}\cos{x},\\
 t = t - \lambda_{1}\log{|y'|} + \tilde\eta,\quad  t\mod{2\pi},\\
-x = x -\lambda_{2}\log{|y'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}
-$$
+x = x -\lambda_{2}\log{|y'| + \omega_{2}\tilde\eta,\quad  x\mod{2\pi},}$
 
 ## TODO List
 Nowadays we are working on improving the readability of the code so we are in the stage of **housekeeping**. Much of the environment variables are hardwired into the code.
