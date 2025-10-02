@@ -6,24 +6,24 @@ from mod_opencl.opencl_class_device import OpenCL_Object
 import time
 
 STATUS = "gwm_128_eta_7_2.5"
+_wp = np.float64 # Working Precision
+_wpi = np.int32 # Integer precision for OpenCL kernel args
 start_time = time.time()
 _random_seed = 34567890
 np.random.seed(_random_seed)
-_pi = 4.0*np.arctan(1.0)
-_max_iter = 10**7
-_dim_essamble = 128
-_dim_eta = 1
-_omega_2_range = 1
-_lambda_1_range = 1536
+_pi = 4.0*np.arctan(1.0) # Pi definition
+_max_iter = 10**7 # Iteration time
+_dim_essamble = 128 # Ensemble size
+_dim_eta = 1 # Allways 1 <- Global size argument
+_lambda_1_range = 1536 # Lambda_1 number of items, use multiple of 128
 _g_size_0 = _dim_essamble
 _g_size_1 = _dim_eta
 _g_size_2 = _lambda_1_range
-_local = (8,1,4)
-_wp = np.float64
-_wpi = np.int32
+_local = (8,1,4) # Local dimension. Change it for device saturation
 _step = 0.01
 #_omega_2_ini = _wp(np.sqrt(_pi/3.)+2.)
-_omega_2_ini = _wp(np.sqrt(2.5))
+_omega_2_ini = _wp(np.sqrt(2.5)) # Omega_2 value. Set on irrational
+# GENERALIZED WHISKER MAP FLAG***************************************
 _gwm = True
 _GMW_FLAG = _wpi(0)
 _v_zero = _wp(0.)
@@ -31,7 +31,7 @@ _ONE_ETA_FLAG = _wpi(1)
 if _gwm:
     _v_zero = _wp(1.)
     _GWM_FLAG = _wpi(1)
-
+#*********************************************************************
 
 lambda_1_list = []
 lambda_2_list = []
@@ -111,8 +111,8 @@ cl.enqueue_copy(OCL_Object.queue, max_width_matrix, OCL_Object.max_width_matrix_
 cl.enqueue_copy(OCL_Object.queue, min_width_matrix, OCL_Object.min_width_matrix_device)
 
 
-file_name_aux = f"data/aux_eta_pre_cached_{_max_iter}_mu_size_{_dim_eta}"\
-           +f"_rand_seed_{_random_seed}_omega_2_range_{_omega_2_range}_gwm_lambda_1_{STATUS}.dat"
+file_name_aux = f"data/aux_eta_pre_cached_{_max_iter}_eta_size_{_dim_eta}"\
+           +f"_rand_seed_{_random_seed}_{STATUS}.dat"
 
 file_aux = open(file_name_aux, 'w')
 half_width_vector = np.max(max_width_matrix, axis=0) - np.min(min_width_matrix, axis=0)

@@ -7,28 +7,28 @@ import time
 
 TIMEIT = []
 TIME_START = time.perf_counter()
+_wp = np.float64 # Working Precision (scientific calc)
+_wpf = np.float32 # Working Precision (map graphics)
+_wpi = np.int32 # Integer Precision (iteration and others)
+_wpl = np.int64 # Iteneger Long
+_wpui = np.uint32 # Unsigned Integer, for Counting map
+_wpushort = np.uint16 # Unsigned half precision integer, for flags
 directory = "data"
-_it_step = 7
+_it_step = 7 # Iteration time as powers of 10
 suffix = f"gwm_{_it_step}_128_eta_fixed"
-_wp = np.float64
-_wpf = np.float32
-_wpi = np.int32
-_wpl = np.int64
-_wpui = np.uint32
-_wpushort = np.uint16
 _random_seed = 34567890
 np.random.seed(_random_seed)
-SPREAD = _wp(1.e-7)
-_pi = 4.0*np.arctan(1.0)
-_max_iter = _wpui(10**_it_step)
-_dim_essamble = _wpui(128)
+SPREAD = _wp(1.e-7) #Spread of ensemble
+_pi = 4.0*np.arctan(1.0) #Pi definition
+_max_iter = _wpui(10**_it_step) #Iteration time function of _it_step
+_dim_essamble = _wpui(128) #Ensemble size
 _omega_2_range = _wpui(1)
-_lambda_1_range = _wpui(512)
-_lambda_1_range_map_out = _wpui(1)
-_common_gid_2_size = 128
-_save_maps = False
-_save_collisions = False
-_gwm_flag = _wpushort(1)
+_lambda_1_range = _wpui(1536) #Use 128 multiple
+_lambda_1_range_map_out = _wpui(1) #Maps to save as graphics! This could skyrocket the memory usage
+_common_gid_2_size = 128 # Size of chunks in lambda space. Change at will
+_save_maps = False # Save map flag. True, saves _lambda_1_range_map_out number per chunk
+_save_collisions = False # Save collision values flag. True, saves the difference between total points and rastered.
+_gwm_flag = _wpushort(1) # GENERALIZED WHISKER MAP. True, calc (x,t,y). False (t,y)
 
 
 #FIRST KERNEL ATRIBS
@@ -37,9 +37,10 @@ _g_size_1 = 1   #First Kernel
 _g_size_2 = _common_gid_2_size   #First Kernel
 #_g_size_2 = 100   #First Kernel
 _step = _wp(0.01)
-_dim_ang = _wpui(2048)
-_dim_y = _wpui(4096)
+_dim_ang = _wpui(2048) # PHASE RASTER SIZE
+_dim_y = _wpui(4096) # ACTION-LIKE RASTER SIZE
 #_dim_y = _wpui(4096)
+#Local problem size of the Whisker map iteration
 _local_id_0 = 4 #First Kernel
 _local_id_1 = 1 #First Kernel
 _local_id_2 = 8 #First Kernel
@@ -114,6 +115,7 @@ array_initial_conditions = np.array(initial_conditions, dtype=_wp)
 array_initial_conditions_eta = np.array(eta_list, dtype=_wp)
 array_lambda_2 = np.array(lambda_2_list, dtype=_wp)
 array_mu = np.array(mu_list, dtype=_wp)
+#If not a Generalized Whisker map, upsilon and omega_2 to 0
 if _gwm_flag:
     array_omega_2 = np.array(omega_2_list, dtype=_wp)
     array_v = np.array(v_list, dtype=_wp)
@@ -191,7 +193,10 @@ total_time = 0.
 for index_offset in np.arange(index_start,lambda_offset):
     start_time = time.time()
     print(f"Start time: {time.strftime('%H:%M:%S')}")
-    lambda_offset_it = _wpui(index_offset*_g_size_2)
+
+    lambda_offset_it = _wpui(index_offset*_g_size_2) #Iteration offset per chunk
+
+    #Evolution of the system. Half-width, mLCE, Rasterization
     ev1 = OCL_Object.kernel.gen_whisker_map(OCL_Object.queue,
                                         (_g_size_0, _g_size_1, _g_size_2),
                                         (_local_id_0, _local_id_1, _local_id_2),
@@ -213,8 +218,10 @@ for index_offset in np.arange(index_start,lambda_offset):
                                         OCL_Object.partition_x_device,
                                         _gwm_flag
                                         )
+    #Wait for the evolution of the whisker map
     cl.wait_for_events([ev1])
     print("First Kernel Finished")
+    #This kernel transform the rasterization back to vector, but in float32 (less mem usage)
     ev_copy_map = OCL_Object.kernel.from_matrix_to_array(OCL_Object.queue,
                                                          (_g_size_0_c, _g_size_1_c, _g_size_2_c),
 #                                                         None,
@@ -230,6 +237,8 @@ for index_offset in np.arange(index_start,lambda_offset):
                                                          _wpui(_g_size_2),
                                                          _wpui(index_offset),
                                                             wait_for=[ev1])
+    cl.wait_for_events([ev_copy_map])
+    #Sum of the rastered cells. Creates collision difference and porosity.
     ev2 = OCL_Object.kernel.reduction(OCL_Object.queue,
                                        (_g_size_0_s,_g_size_1_s,_g_size_2_s),
                                        (_local_id_0_s,_local_id_1_s,_local_id_2_s),
@@ -251,8 +260,7 @@ for index_offset in np.arange(index_start,lambda_offset):
                                        wait_for=[ev_copy_map])
     cl.wait_for_events([ev2])
     print("Porosity count")
-
-
+    #Sum over the partitions of the Shannon entropy from element to ensemble.
     ev_shannon = OCL_Object.kernel.Shannon_entropy(OCL_Object.queue,
                                                    (_g_size_0_t, _g_size_1_t, _g_size_2_t),
                                                    (_local_id_0_t, _local_id_1_t, _local_id_2_t),
@@ -268,6 +276,7 @@ for index_offset in np.arange(index_start,lambda_offset):
 
     cl.wait_for_events([ev_shannon])
     print("Count * log (count) Shannon_entropy (Sum argument)")
+    #Copy every value out of the GPU
     ev_copy_6 = cl.enqueue_copy(OCL_Object.queue, counter_array, OCL_Object.counter_array_device)
     ev_copy_8 = cl.enqueue_copy(OCL_Object.queue, counter_array_x, OCL_Object.counter_array_x_device)
     ev_inform_tau = cl.enqueue_copy(OCL_Object.queue, counter_information_tau, OCL_Object.counter_information_tau_device)
@@ -277,17 +286,24 @@ for index_offset in np.arange(index_start,lambda_offset):
     cl.wait_for_events([ ev_copy_6, ev_copy_8, ev_inform_tau, ev_inform_x, ev_colision_tau, ev_colision_x ])
 
 
+    #Collision count****************************
     count = np.sum(counter_array, axis=0)
     count_x = np.sum(counter_array_x, axis=0)
+    #*******************************************
 
+    #INFORMATION OF THE SHANNON ENTROPY******************************************************
     info_tau =1./np.log(_wp(_dim_ang))*(np.log(_wp(_dim_essamble)*_wp(_max_iter))-\
         np.sum(counter_information_tau, axis=0)/(_wp(_dim_essamble)*_wp(_max_iter)))
     info_x =1./np.log(_dim_ang)*(np.log(_wp(_dim_essamble)*_wp(_max_iter))-\
         np.sum(counter_information_x, axis=0)/(_wp(_dim_essamble)*_wp(_max_iter)))
 
+    #NORMALIZED INFORMETION OVER RANDOM TRAJECTORY
     info_tau_re_shape =(ones- np.reshape(info_tau,(_g_size_2_t,1) ))/INFORMARTION_RANDOM
     info_x_re_shape = (ones-np.reshape(info_x,(_g_size_2_t,1) ))/INFORMARTION_RANDOM
+    #******************************************************************************************
 
+    #*******************************************************************************************
+    # ACOMODATES ON VECTOR FOR HDD COPY AT THE END OF THE PROGRAM
     c_re_shape = np.reshape(count, (_g_size_2_s, 1))
     c_x_re_shape = np.reshape(count_x, (_g_size_2_s, 1))
     index_start_offset = index_start*_g_size_2_s
@@ -312,8 +328,9 @@ for index_offset in np.arange(index_start,lambda_offset):
                                info_x_re_shape))
     array_to_file[first:first + _g_size_2_s ,:9] = v_stack
     first = first + _g_size_2_s
-    end_time = (time.time() - start_time)/3600
-    total_time = total_time + end_time
+    #*****************************************************************************************************************************
+    end_time = (time.time() - start_time)/3600 # Time estimate
+    total_time = total_time + end_time # Total time per chunk
     print(f"Total time: {end_time}")
     ev_copy_MAP = cl.enqueue_copy(OCL_Object.queue, MAP_OUT , OCL_Object.MAP_OUT_device)
     ev_copy_MAP_x = cl.enqueue_copy(OCL_Object.queue, MAP_OUT_x , OCL_Object.MAP_OUT_x_device)
@@ -366,17 +383,13 @@ OCL_Object.free_buffer("counter_x_device")
 mlce =2.*np.fabs(np.mean(mLCE, axis=1) - 2.)/_wp(_max_iter)
 mLCE_M = 2.*np.fabs(np.sum(mLCE, axis = 1)/_wp(_dim_essamble) - 2.)/_wp(_max_iter)
 mLCE_mean = 2.*np.fabs(np.mean(mLCE,axis=1)- 2.)/_wp(_max_iter)
-#half_width_vector = (max_width_matrix - min_width_matrix)/2.
 min_width = np.min(min_width_matrix, axis=1)
 max_width = np.max(max_width_matrix, axis=1)
 half_width_vector = max_width - min_width
 full_width_vector = max_width_matrix - min_width_matrix
 metric_entropy_vector = output_matrix * full_width_vector / 2.
 for lam in np.arange(_lambda_1_range):
-    #half__ = np.min(half_width_vector[:,lam], axis = 0)
     half__ = half_width_vector[lam]/2
-    #index = np.where(half_width_vector[:,lam] == half__ )[0][0]
-#    mlce = mLCE[index,lam]
     mlce_max = np.max(mLCE[lam, :])
     index_mlce = np.where(mLCE[lam,:] == mlce_max)[0][0]
     min_tan_map_L = np.min(output_matrix[lam, :] )
