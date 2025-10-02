@@ -99,8 +99,16 @@ class OpenCL_Object(Platform_Device_OpenCL):
       self.__assign_attrib(true_value_name, buffer_name, local_buffer, "_device")
 
     def program(self, kernel_file_name : str, bulid_options : list = []):
-        with open(f"{kernel_file_name}", "r") as file:
-            kernel_read = file.read()
+        kernel_read = ''
+        if isinstance(kernel_file_name, list):
+            for files in kernel_file_name:
+                with open(f"{files}", "r") as file:
+                    kernel_read = f"{kernel_read}\n{file.read()}"
+        else:
+
+            with open(f"{kernel_file_name}", "r") as file:
+                kernel_read = file.read()
+
         prog = cl.Program(self.ctx, kernel_read).build( bulid_options )
         self.__setattr__("kernel", prog)
 

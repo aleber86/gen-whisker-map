@@ -5,8 +5,6 @@ import numpy as np
 from mod_opencl.opencl_class_device import OpenCL_Object
 import time
 
-TIMEIT = []
-TIME_START = time.perf_counter()
 _wp = np.float64 # Working Precision (scientific calc)
 _wpf = np.float32 # Working Precision (map graphics)
 _wpi = np.int32 # Integer Precision (iteration and others)
@@ -145,8 +143,6 @@ ones = np.ones((_g_size_2_t,1), dtype = _wp)
 #WATCH OUT  !!!!!!!!
 MAP_OUT = np.zeros((int(_dim_y)*int(_dim_ang), 3, _lambda_1_range_map_out), dtype = _wpf)
 MAP_OUT_x = np.zeros((int(_dim_y)*int(_dim_ang), 3, _lambda_1_range_map_out), dtype = _wpf)
-#MAP_OUT = np.zeros((int(_dim_y),int(_dim_ang), _lambda_1_range_map_out), dtype = _wpui)
-#MAP_OUT_x = np.zeros((int(_dim_y),int(_dim_ang), _lambda_1_range_map_out), dtype = _wpui)
 OCL_Object = OpenCL_Object()
 
 #Buffer CPU -> GPU
@@ -180,7 +176,7 @@ OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter_colision_tau")
 OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter_colision_x")
 OCL_Object.buffer_local(_local_id_0_s, 4, "counter_partition_tau")
 OCL_Object.buffer_local(_local_id_0_s, 4, "counter_partition_x")
-OCL_Object.program('one_kernel.cl', ["-I ./includes"])
+OCL_Object.program(['one_kernel.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
 
 array_to_file = np.zeros((_lambda_1_range, 26), _wp)
 print("Mem. Buffer OK")
@@ -433,7 +429,3 @@ with open(file_name, "w") as file_to_save:
     file_to_save.write(headers)
     np.savetxt(file_to_save, array_to_file)
 
-TIME_END = time.perf_counter()
-TIMEIT.append(TIME_END-TIME_START)
-with open(f"time_data_{_dim_essamble}_{_max_iter}.time", "a") as time_file:
-    np.savetxt(time_file, np.array(TIMEIT))

@@ -91,8 +91,16 @@ class Generador():
         self.mem_flag = cl.mem_flags
         self.buffer_write()
         self.buffer_read()
-        with open(archivo, 'r') as file_kernel:
-            kernel_script = file_kernel.read()
+        if isinstance(archivo, list):
+            kernel_script = ''
+            for files in archivo:
+                with open(files, 'r') as file_kernel:
+                    kernel_script = f"{kernel_script}\n{file_kernel.read()}"
+
+        else:
+
+            with open(archivo, 'r') as file_kernel:
+                kernel_script = file_kernel.read()
 
 
         self.program = cl.Program(self.contexto, kernel_script).build()

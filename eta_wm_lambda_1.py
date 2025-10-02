@@ -88,7 +88,7 @@ OCL_Object.buffer_global(output_matrix, "output_matrix")
 OCL_Object.buffer_global(max_width_matrix, "max_width_matrix")
 OCL_Object.buffer_global(min_width_matrix, "min_width_matrix")
 OCL_Object.buffer_global(mu, "mu")
-OCL_Object.program('kernel_lambda_1.cl', [])
+OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
 
 _max_iter = _wpi(_max_iter)
 

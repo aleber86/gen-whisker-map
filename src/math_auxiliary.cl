@@ -1,6 +1,3 @@
-#ifndef HOUSEHOLDER_QR
-#define HOUSEHOLDER_QR
-
 
 void Flat_to_zero(double *A_in, int size, double tollerance){
 	//If element is < tollerance, element dropped to 0.
@@ -118,5 +115,3 @@ void HQR(double *A, double *Q, double *R){
 	
 }
 
-
-#endif
