@@ -1,4 +1,8 @@
+import argparse as aps
+
+
 class file_reader:
+
     def __init__(self, file_name : str, headers = False, headers_size = 1) -> None:
         self.file_name = file_name
         self.list_size = 0
@@ -39,15 +43,57 @@ class file_reader:
         attribs = {"records" : self.records, "columns" : self.columns}
         return attribs
 
+class Cmd_parser:
+
+    def __init__(self, program : str = '', menu_args : dict = {}):
+        self.menu = aps.ArgumentParser(prog = program)
+        self.__argument_config(args = menu_args)
+
+    def __argument_config(self, args):
+        for key, value in args.items():
+            self.menu.add_argument(key, value['long_string'],
+                                   action=value['action'],
+                                   help=value['help'],
+                                   default=value['default'],
+                                   nargs=value['nargs'],
+                                   type = value['type'])
+
+
+    def get_menu(self):
+        return self.menu.parse_args()
+
 
 
 
 if __name__ == '__main__':
-    read = file_reader("../resultado_64_el_wm.dat")
-    read.read_file()
-    datos = read.get_data()
-    att = read.get_full_atribs()
-    print(att)
-#    print(datos)
+
+    cmd_line_args = {'-f' : {'long_string' : '--file-config',
+                             'action' : 'store',
+                             'help' : 'Parse a config file for the program.',
+                             'type' : str,
+                             'nargs' : '?',
+                             'default' : ''},
+                     '-i' : {'long_string' : '--input-file',
+                             'action' : 'store',
+                             'help' : 'Sets the auxiliary file to calculate ...',
+                             'nargs' : '?',
+                             'type' : str,
+                             'default' : ''},
+                     '-o' : {'long_string' : '--output-file',
+                             'action' : 'store',
+                             'help' : 'Sets the output file of the calculation.',
+                             'nargs' : '?',
+                             'type' : str,
+                             'default' : ''},
+                     '-r' : {'long_string' : '--raster-dimension',
+                             'action' : 'store',
+                             'help' : 'Sets the raster dimension size',
+                             'type': int,
+                             'nargs' : 2,
+                             'default' : [4096,2048]}
+                    }
+    args = Cmd_parser('',cmd_line_args)
+    menu = args.get_menu()
+    print(menu)
 
 

@@ -36,7 +36,7 @@ _In which devices can it run?_ In every OpenCL compliant device, but there's a c
   
   
 ## Mathematical Background
-To study Arnold's diffusion (Arnold, 1964), Chirikov (1979) propose the map that describes de dynamical system,
+To study Arnold's diffusion (Arnold, 1964), Chirikov (1979) propose a map that describes de dynamical system,
 
 $$
 \begin{align*}
