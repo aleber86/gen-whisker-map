@@ -44,7 +44,15 @@ def main():
     half_list = []
 
     all_readed = [lambda_1_list, lambda_2_list, omega_2_list, mu_list, eta_list, v_list, half_list]
+    reader = File_reader('aux_pre_cached.dat')
+    reader.read_file()
+    data_read = reader.get_data()
+    for data_stored in data_read:
+        for index, arguments in enumerate(all_readed):
+            arguments.append(data_stored[index])
 
+
+    """
     with open('aux_pre_cached.dat', 'r') as file:
         status = True
         while status:
@@ -55,7 +63,7 @@ def main():
             else:
                 status = False
 
-
+    """
     array_initial_conditions_eta = np.array(eta_list, dtype=_wp)
 
     #initial_conditions = (x,t,y)
