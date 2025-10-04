@@ -92,7 +92,7 @@ OCL_Object.buffer_global(mu, "mu")
 #***********************************************************************************************************
 #Program load and build. If you want to add opt, do it inside list [], e.g. ["-cl-single-precision-constant"]
 #Do not recomend using any 'fast math' optimization
-OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
+OCL_Object.program(['src/kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
 #************************************************************************************************************
 _max_iter = _wpi(_max_iter)
 

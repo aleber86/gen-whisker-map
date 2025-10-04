@@ -3,36 +3,65 @@
 import pyopencl as cl
 import numpy as np
 from mod_opencl.opencl_class_device import OpenCL_Object
-from mod_functions.object_class_functions import File_reader
+from mod_functions.object_class_functions import File_reader, Cmd_parser
+from mod_functions.cmd_line_args_scheme import eta_wm_lambda_1_scheme
+import configparser
 import time
 
+
+
+
 def main():
-    STATUS = "gwm_128_eta_7_2.5"
+
     _wp = np.float64 # Working Precision
     _wpi = np.int32 # Integer precision for OpenCL kernel args
-    start_time = time.time()
-    _random_seed = 34567890
-    np.random.seed(_random_seed)
-    _pi = 4.0*np.arctan(1.0) # Pi definition
-    _max_iter = 10**7 # Iteration time
-    _dim_essamble = 128 # Ensemble size
-    _dim_eta = 1 # Allways 1 <- Global size argument
-    _lambda_1_range = 1536 # Lambda_1 number of items, use multiple of 128
-    _g_size_0 = _dim_essamble
-    _g_size_1 = _dim_eta
-    _g_size_2 = _lambda_1_range
-    _local = (8,1,4) # Local dimension. Change it for device saturation
-    _step = 0.01
-    #_omega_2_ini = _wp(np.sqrt(_pi/3.)+2.)
-    _omega_2_ini = _wp(np.sqrt(2.5)) # Omega_2 value. Set on irrational
-    # GENERALIZED WHISKER MAP FLAG***************************************
-    _gwm = True
+    _pi = _wp(4.0*np.arctan(1.0)) # Pi definition
+
     _GWM_FLAG = _wpi(0)
     _v_zero = _wp(0.)
     _ONE_ETA_FLAG = _wpi(1)
+    start_time = time.time()
+
+    #Command line arguments config
+    _program_name = eta_wm_lambda_1_scheme['program_name']
+    _cmd_scheme = eta_wm_lambda_1_scheme['arguments_menu']
+    cmd_line_argument_parser = Cmd_parser(_program_name, _cmd_scheme)
+    cmd_line_arguments = cmd_line_argument_parser.get_menu()
+    file_input_name  = cmd_line_arguments.file_config
+    #
+
+    #If input config file parsed,
+    config_input = configparser.ConfigParser()
+    config_section = ''
+    if file_input_name is not None:
+        file_configure = file_input_name
+        config_section = "USER"
+    else:
+        file_configure = ".config/eta_wm_lambda_1.ini"
+        config_section = "DEFAULT"
+    config_input.read(file_configure)
+    _random_seed = config_input.getint(config_section, 'random_seed')
+    _max_iter = config_input.getint(config_section, 'max_iter')
+    _dim_essamble = config_input.getint(config_section, "dim_essamble")
+    _dim_eta = config_input.getint(config_section, 'dim_eta')
+    _lambda_1_range = config_input.getint(config_section, "lambda_1_range")
+    STATUS = config_input.get(config_section, "sufix")
+
+    _local = tuple([int(value) for value in (config_input.get(config_section, "local").split(","))])
+
+    _gwm = config_input.getboolean(config_section, "gwm")
+    print(STATUS)
+
+
     if _gwm:
         _v_zero = _wp(1.)
         _GWM_FLAG = _wpi(1)
+
+    np.random.seed(_random_seed)
+    #OpenCL global problem size fixed
+    _g_size_0 = _dim_essamble
+    _g_size_1 = _dim_eta
+    _g_size_2 = _lambda_1_range
     #*********************************************************************
 
     lambda_1_list = []
@@ -52,18 +81,6 @@ def main():
             arguments.append(data_stored[index])
 
 
-    """
-    with open('aux_pre_cached.dat', 'r') as file:
-        status = True
-        while status:
-            line = file.readline().split()
-            if line != []:
-                for index, value in enumerate(all_readed):
-                    value.append(line[index])
-            else:
-                status = False
-
-    """
     array_initial_conditions_eta = np.array(eta_list, dtype=_wp)
 
     #initial_conditions = (x,t,y)
@@ -79,7 +96,6 @@ def main():
     #output_matrix -> CPU
 
 
-    _to_file = np.zeros((_lambda_1_range, 7))
 
     _to_aux_file = np.zeros((_lambda_1_range, 7))
 
@@ -98,7 +114,7 @@ def main():
     OCL_Object.buffer_global(max_width_matrix, "max_width_matrix")
     OCL_Object.buffer_global(min_width_matrix, "min_width_matrix")
     OCL_Object.buffer_global(mu, "mu")
-    OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
+    OCL_Object.program(['src/kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
 
     _max_iter = _wpi(_max_iter)
 
@@ -124,7 +140,6 @@ def main():
     file_name_aux = f"data/aux_eta_pre_cached_{_max_iter}_eta_size_{_dim_eta}"\
                +f"_rand_seed_{_random_seed}_{STATUS}.dat"
 
-    file_aux = open(file_name_aux, 'w')
     half_width_vector = np.max(max_width_matrix, axis=0) - np.min(min_width_matrix, axis=0)
     for ind in np.arange(_lambda_1_range):
 
@@ -146,7 +161,8 @@ def main():
 
 
     end_time = (time.time() - start_time)/3600
-    np.savetxt(file_aux, _to_aux_file)
+    with open(file_name_aux, 'w') as file:
+        np.savetxt(file, _to_aux_file)
     #
 
     print(f"Total time: {end_time}")

@@ -176,7 +176,7 @@ OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter_colision_tau")
 OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter_colision_x")
 OCL_Object.buffer_local(_local_id_0_s, 4, "counter_partition_tau")
 OCL_Object.buffer_local(_local_id_0_s, 4, "counter_partition_x")
-OCL_Object.program(['one_kernel.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
+OCL_Object.program(['src/one_kernel.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
 
 array_to_file = np.zeros((_lambda_1_range, 26), _wp)
 print("Mem. Buffer OK")
