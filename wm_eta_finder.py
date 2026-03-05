@@ -5,20 +5,21 @@ import numpy as np
 from mod_opencl.opencl_class_device import OpenCL_Object
 import time
 
-STATUS = "eta_finder"
-start_time = time.time()
+print(time.localtime(time.time()))
+STATUS = "gwm_eta_finder_256_elements_omega_2_2.5"
 _wp = np.float64 # Working Precision
 _wpi = np.int32 # Integer precision (for OpenCL arguments)
 _random_seed = 34567890
+#_random_seed = 547891248
 np.random.seed(_random_seed)
 _pi = 4.0*np.arctan(1.0) # System definition of pi
 _max_iter = 10**7 # Iteration time
-_dim_essamble = 64 # Ensemble of iniitial conditions
+_dim_essamble = 256 # Ensemble of iniitial conditions
 #Change _dim_eta size of the eta uniform distribution
 _dim_eta = 40
 _omega_2_range = 1
 #Change the _lambda_1_range for lambda calc. (use 128 multiple)
-_lambda_1_range  = 1536
+_lambda_1_range  = 128
 _SPREAD = _wp(1.e-7) # Spread around (0,0,0) of initial conditions
 #************************************************************************************
 # Do not change this. Global problem size (OpenCL)
@@ -28,12 +29,12 @@ _g_size_2 = _lambda_1_range
 _local = (4,4,4)
 #************************************************************************************
 _step = 0.01
-_omega_2_ini = _wp(np.sqrt(_pi/3.)+2.) # Could let this unchanged if you use only WM
+_omega_2_ini = _wp(np.sqrt(2.5)) # Could let this unchanged if you use only WM
 #************************************************************************************
 # GENERALIZED WHISKER MAP FLAG!
 #
 # if _gwm = True, then it will calculate eta value for the generalized whisker map
-_gwm = False
+_gwm = True
 _ONE_ETA_FLAG = _wpi(0)
 _v_zero = _wp(0.)
 _GWM_FLAG = _wpi(0)
@@ -45,7 +46,7 @@ if _gwm:
 #***************************************************************************************
 #initial_conditions = (x,t,y)
 # Change lambda_ini for the starting lambda value !!!!
-lambda_ini = _wp(5.0) # <----------------Change it if you want to calc. another interval
+lambda_ini = _wp(15.) # <----------------Change it if you want to calc. another interval
 # *************************************************************************************
 #
 lambda_1 = np.array([lambda_ini + _step*lam for lam in np.arange(_lambda_1_range)])
@@ -78,6 +79,7 @@ min_width_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range), dtype=_w
 #*****************************************************************************************************
 #OpenCL Memory buffers
 OCL_Object = OpenCL_Object()
+start_time = time.time()
 #Buffer CPU -> GPU
 OCL_Object.buffer_global(array_initial_conditions, "initial_conditions", False)
 OCL_Object.buffer_global(array_initial_conditions_eta, "initial_conditions_eta", False)
@@ -92,6 +94,11 @@ OCL_Object.buffer_global(mu, "mu")
 #***********************************************************************************************************
 #Program load and build. If you want to add opt, do it inside list [], e.g. ["-cl-single-precision-constant"]
 #Do not recomend using any 'fast math' optimization
+with open('kernel_lambda_1_form.cl', 'r') as file_to_change:
+    script = file_to_change.read()
+    script = script.replace("#define MAXITER", f"#define MAXITER {_max_iter}")
+with open('kernel_lambda_1.cl', 'w') as file:
+    file.write(script)
 OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
 #************************************************************************************************************
 _max_iter = _wpi(_max_iter)

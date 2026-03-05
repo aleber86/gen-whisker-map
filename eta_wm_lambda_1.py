@@ -6,6 +6,7 @@ from mod_opencl.opencl_class_device import OpenCL_Object
 from mod_functions.object_class_functions import File_reader
 import time
 
+<<<<<<< HEAD
 def main():
     STATUS = "gwm_128_eta_7_2.5"
     _wp = np.float64 # Working Precision
@@ -34,6 +35,39 @@ def main():
         _v_zero = _wp(1.)
         _GWM_FLAG = _wpi(1)
     #*********************************************************************
+=======
+_wp = np.float64 # Working Precision
+_wpi = np.int32 # Integer precision for OpenCL kernel args
+#_LAMBDA_1 = _wp(25.)
+#STATUS = f"wm_eta_linespace_it_8_{_LAMBDA_1}"
+STATUS = "wm_eta_using_1024_"
+_random_seed = 34567890
+#_random_seed = 547891248
+np.random.seed(_random_seed)
+_pi = 4.0*np.arctan(1.0) # Pi definition
+_max_iter = 10**7 # Iteration time
+_dim_essamble = 640 # Ensemble size
+_dim_eta = 1 # Allways 1 <- Global size argument
+_lambda_1_range = 1536# Lambda_1 number of items, use multiple of 128
+_g_size_0 = _dim_essamble
+_g_size_1 = _dim_eta
+_g_size_2 = _lambda_1_range
+_local = (8,1,8) # Local dimension. Change it for device saturation
+_step = 0.01
+_SPREAD = _wp(10.**-7.)
+#_omega_2_ini = _wp(np.sqrt(_pi/3.)+2.)
+_omega_2_ini = _wp(np.sqrt(2.5)) # Omega_2 value. Set on irrational
+# GENERALIZED WHISKER MAP FLAG***************************************
+_gwm = False
+_GWM_FLAG = _wpi(0)
+_v_zero = _wp(0.)
+_ONE_ETA_FLAG = _wpi(1)
+if _gwm:
+    _v_zero = _wp(1.)
+    _GWM_FLAG = _wpi(1)
+#*********************************************************************
+_explicit_eta = False
+>>>>>>> abba830 (Housekeeping)
 
     lambda_1_list = []
     lambda_2_list = []
@@ -43,6 +77,7 @@ def main():
     v_list = []
     half_list = []
 
+<<<<<<< HEAD
     all_readed = [lambda_1_list, lambda_2_list, omega_2_list, mu_list, eta_list, v_list, half_list]
     reader = File_reader('aux_pre_cached.dat')
     reader.read_file()
@@ -50,6 +85,19 @@ def main():
     for data_stored in data_read:
         for index, arguments in enumerate(all_readed):
             arguments.append(data_stored[index])
+=======
+all_readed = [lambda_1_list, lambda_2_list, omega_2_list, mu_list, eta_list, v_list, half_list]
+
+with open('aux_10000000_256_wm_7_full.dat', 'r') as file:
+    status = True
+    while status:
+        line = file.readline().split()
+        if line != []:
+            for index, value in enumerate(all_readed):
+                value.append(line[index])
+        else:
+            status = False
+>>>>>>> abba830 (Housekeeping)
 
 
     """
@@ -63,6 +111,7 @@ def main():
             else:
                 status = False
 
+<<<<<<< HEAD
     """
     array_initial_conditions_eta = np.array(eta_list, dtype=_wp)
 
@@ -77,12 +126,39 @@ def main():
     array_v = array_omega_2**2 *np.sinh(_pi*lambda_1/2.)/np.sinh(lambda_1*_pi/2.*array_omega_2) * _v_zero
     array_lambda_1 = lambda_1
     #output_matrix -> CPU
+=======
+#initial_conditions = (x,t,y)
+initial_conditions = np.array(np.random.uniform(-1,1, (_dim_essamble, 3)), dtype = _wp)*_SPREAD
+array_initial_conditions = np.array(initial_conditions, dtype=_wp)
+lambda_1 = np.array(lambda_1_list, dtype = _wp)
+#lambda_1 = np.ones((_lambda_1_range,), dtype=_wp) * _LAMBDA_1
+array_omega_2 = np.array(omega_2_list, dtype = _wp)
+array_omega_2 = np.ones(array_omega_2.shape, dtype = _wp) * _omega_2_ini
+mu = np.array(mu_list, dtype = _wp)
+
+array_lambda_2 = array_omega_2[0] * lambda_1
+array_v = array_omega_2**2 *np.sinh(_pi*lambda_1/2.)/np.sinh(lambda_1*_pi/2.*array_omega_2) * _v_zero
+array_lambda_1 = lambda_1
+
+if _explicit_eta:
+    eta_explicit = _wp(4.2)
+    #eta_explicit = np.linspace(0,2*_pi,_lambda_1_range)
+    #eta_explicit = lambda_1*_wp(3.57012) + np.ones(lambda_1.shape, dtype = _wp) * _wp(-11.189)
+
+    #a               = 3.57012          +/- 0.0574       (1.608%)
+    #b               = -11.189          +/- 0.7487       (6.691%)
+
+
+    array_initial_conditions_eta = np.ones(array_initial_conditions_eta.shape, dtype=_wp)* eta_explicit
+#output_matrix -> CPU
+>>>>>>> abba830 (Housekeeping)
 
 
     _to_file = np.zeros((_lambda_1_range, 7))
 
     _to_aux_file = np.zeros((_lambda_1_range, 7))
 
+<<<<<<< HEAD
     output_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range))
     max_width_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range), dtype=_wp)
     min_width_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range), dtype=_wp)
@@ -99,6 +175,30 @@ def main():
     OCL_Object.buffer_global(min_width_matrix, "min_width_matrix")
     OCL_Object.buffer_global(mu, "mu")
     OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
+=======
+output_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range))
+max_width_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range), dtype=_wp)
+min_width_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range), dtype=_wp)
+OCL_Object = OpenCL_Object()
+start_time = time.time()
+#Buffer CPU -> GPU
+OCL_Object.buffer_global(array_initial_conditions, "initial_conditions", False)
+OCL_Object.buffer_global(array_initial_conditions_eta, "initial_conditions_eta", False)
+OCL_Object.buffer_global(array_omega_2, "omega_2", False)
+OCL_Object.buffer_global(array_v, "v", False)
+OCL_Object.buffer_global(array_lambda_2, "lambda_2", False)
+OCL_Object.buffer_global(array_lambda_1, "lambda_1", False)
+OCL_Object.buffer_global(output_matrix, "output_matrix")
+OCL_Object.buffer_global(max_width_matrix, "max_width_matrix")
+OCL_Object.buffer_global(min_width_matrix, "min_width_matrix")
+OCL_Object.buffer_global(mu, "mu")
+with open('kernel_lambda_1_form.cl', 'r') as file_to_change:
+    script = file_to_change.read()
+    script = script.replace("#define MAXITER", f"#define MAXITER {_max_iter}")
+with open('kernel_lambda_1.cl', 'w') as file:
+    file.write(script)
+OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
+>>>>>>> abba830 (Housekeeping)
 
     _max_iter = _wpi(_max_iter)
 

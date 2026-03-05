@@ -2,7 +2,7 @@
 
 #include"modulus.h"
 #include"jacobian.h"
-#define MAXITER 10000000  
+#define MAXITER  
 
 __kernel void gen_whisker_map(__global double *initial_conditions, 
         __global double *output_matrix, 

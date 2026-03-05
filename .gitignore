@@ -1,6 +1,14 @@
+<<<<<<< HEAD
 #pycache
 */__pycache__
 
 #any data output
 data/*
 
+=======
+#output/input
+*.dat
+data/*.dat
+*.map
+data/*.map
+>>>>>>> abba830 (Housekeeping)
