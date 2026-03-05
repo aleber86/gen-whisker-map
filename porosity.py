@@ -112,6 +112,7 @@ def main():
     _gwm_flag = _wpushort(1) # GENERALIZED WHISKER MAP. True, calc (x,t,y). False (t,y)
 
 
+
     #FIRST KERNEL ATRIBS
     _g_size_0 = int(_dim_ensemble)  #First Kernel
     _g_size_1 = 1   #First Kernel
@@ -159,8 +160,11 @@ def main():
     #lambda chunks
     lambda_offset = _wpui(_lambda_1_range/_g_size_2)
     #******************************************************************************************
+    #******************************************************************************************
 
 
+    #lambda chunks
+    lambda_offset = _wpui(_lambda_1_range/_g_size_2)
 
     #CPU side objects
     #********************************************************************************************
@@ -168,7 +172,7 @@ def main():
     array_initial_conditions = np.array(np.random.uniform(-1,1, (_dim_ensemble, 3)), dtype=_wp) * _wp(SPREAD)
 
     #Read model paramenters from file
-    with open('./pre_cached_wm_128_elements.dat', 'r') as file:
+    with open('pre_cached_gwm_omega_2_2.5_128_elements.dat', 'r') as file:
         array_file_initial_conditions = np.loadtxt(file, dtype = _wp)
 
     array_lambda_1 = array_file_initial_conditions[:,0].copy()
@@ -521,6 +525,9 @@ def main():
                                       min_widht_orbit,
                                       y_max_tangent_map
                                       ])
+
+
+
 
     file_name = f"{directory}/data_{suffix}.dat"
     save_output_to_file(array_to_file, file_name)

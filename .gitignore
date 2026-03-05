@@ -4,9 +4,10 @@
 #any data output
 data/*
 
-=======
 #output/input
 *.dat
 
 #any back_up_data
 back_up_data/
+*.map
+data/*.map
