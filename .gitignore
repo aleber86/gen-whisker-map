@@ -1,6 +1,5 @@
-<<<<<<< HEAD
 #pycache
-*/__pycache__
+*/__pycache__/*.pyc
 
 #any data output
 data/*
@@ -8,7 +7,6 @@ data/*
 =======
 #output/input
 *.dat
-data/*.dat
-*.map
-data/*.map
->>>>>>> abba830 (Housekeeping)
+
+#any back_up_data
+back_up_data/

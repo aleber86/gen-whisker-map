@@ -67,7 +67,8 @@ def save_output_to_file(array_to_be_saved : np.array, file_name : str):
                         "std_h(all)", "max_hw", "min_hw", "min mLCE(tan_map)",
                         "max mLCE(tan_map)", "std mLCE(tan_map)",
                         "mean_hw(orbits)", "min_hw(max eta)", "max_hw(max eta)",
-                        "std_width(orbits)", "min_widht(all)"]
+                        "std_width(orbits)", "min_widht(all)", "y_max_tangent_map"]
+
     headers = "#"
     for index_h, head in enumerate(headers_elements):
         headers = f"{headers}\t({index_h+1}){head}"
@@ -77,9 +78,25 @@ def save_output_to_file(array_to_be_saved : np.array, file_name : str):
         np.savetxt(file_to_save, array_to_be_saved)
 
 
+def mask_gather(array_in : np.array, array_comp : np.array) -> np.array:
+    """
+    Function compares the values in array_comp with array_in to get the mask
+
+    Args:
+        array_in : array of values to be compared
+        array_comp : array of values to comapre
+
+    Returns:
+        mask : array of bool
+    """
+
+    mask = array_in == array_comp
+    return mask
+
+
 def main():
     directory = "data"
-    _it_step = 5 # Iteration time as powers of 10
+    _it_step = 7 # Iteration time as powers of 10
     suffix = f"gwm_{_it_step}_1_pre_catched_256"
     _random_seed = 34567890
     #_random_seed = 547891248
@@ -139,11 +156,11 @@ def main():
     _local_id_1_t = 1
     _local_id_2_t = 1
 
+    #lambda chunks
+    lambda_offset = _wpui(_lambda_1_range/_g_size_2)
     #******************************************************************************************
 
 
-    #lambda chunks
-    lambda_offset = _wpui(_lambda_1_range/_g_size_2)
 
     #CPU side objects
     #********************************************************************************************
@@ -151,7 +168,7 @@ def main():
     array_initial_conditions = np.array(np.random.uniform(-1,1, (_dim_ensemble, 3)), dtype=_wp) * _wp(SPREAD)
 
     #Read model paramenters from file
-    with open('pre_cached_gwm_omega_2_2.5_128_elements.dat', 'r') as file:
+    with open('./pre_cached_wm_128_elements.dat', 'r') as file:
         array_file_initial_conditions = np.loadtxt(file, dtype = _wp)
 
     array_lambda_1 = array_file_initial_conditions[:,0].copy()
@@ -170,7 +187,7 @@ def main():
         array_v = np.zeros_like(array_v, dtype=_wp)
 
 
-    array_to_file = np.zeros((_lambda_1_range, 26), _wp) #Creates array to save final output
+    array_to_file = np.zeros((_lambda_1_range, 27), _wp) #Creates array to save final output
     if array_lambda_1.shape[0] != _lambda_1_range:
         print(f"Range of lambda: {_lambda_1_range} not equal to model parameters list size: {array_lambda_1.shape[0]}.")
         exit(-1)
@@ -439,43 +456,71 @@ def main():
     OCL_Object.free_buffer("counter_array_collision_x_device")
     #*****************************************************************************************
 
+    #Statistics calculations
+    #*****************************************************************************************
+    _axis = 1
+    #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
     mlce =2.*np.fabs(np.mean(mLCE, axis=1) - 2.)/_wp(_max_iter)
-    mLCE_M = 2.*np.fabs(np.sum(mLCE, axis = 1)/_wp(_dim_ensemble) - 2.)/_wp(_max_iter)
-    mLCE_mean = 2.*np.fabs(np.mean(mLCE,axis=1)- 2.)/_wp(_max_iter)
-    min_width = np.min(min_width_matrix, axis=1)
-    max_width = np.max(max_width_matrix, axis=1)
+
+    #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
+    mLCE_M = 2.*np.fabs(np.sum(mLCE, axis = _axis)/_wp(_dim_ensemble) - 2.)/_wp(_max_iter)
+
+    #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
+    mLCE_mean = 2.*np.fabs(np.mean(mLCE,axis= _axis)- 2.)/_wp(_max_iter)
+
+    #Minimum action-like variable value per layer shape: (_lambda_1_range,)
+    min_width = np.min(min_width_matrix, axis= _axis)
+    #Maximum action-like variable value per layer shape: (_lambda_1_range,)
+    max_width = np.max(max_width_matrix, axis= _axis)
+
+    #2* y_{\\mathrm{hw}} shape: (_lambda_1_range)
     half_width_vector = max_width - min_width
+
+    #2* y_{\\mathrm{b}} shape: (_lambda_1_range, _dim_ensemble)
     full_width_vector = max_width_matrix - min_width_matrix
+
+    #L * y_{\\mathrm{b}} shape: (_lambda_1_range, _dim_ensemble)
     metric_entropy_vector = output_matrix * full_width_vector / 2.
-    for lam in np.arange(_lambda_1_range):
-        half__ = half_width_vector[lam]/2
-        mlce_max = np.max(mLCE[lam, :])
-        min_tan_map_L = np.min(output_matrix[lam, :] )
-        max_tan_map_L = np.max(output_matrix[lam, :] )
-        std_tan_map_L = np.std(output_matrix[lam, :] )
-        std_width = np.std(full_width_vector[lam, :] )
-        h_metric_mean = np.mean(metric_entropy_vector[lam,:]*array_lambda_1[lam])
-        h_metric_std = np.std(metric_entropy_vector[lam, :]*array_lambda_1[lam])
-        min_widht_orbit = np.min(full_width_vector[lam,:])
-        array_to_file[lam, 9:] = np.array([
-                                          np.mean(output_matrix[lam, :], axis=0),
-                                          mlce_max,
-                                          mLCE_M[lam],
-                                          mLCE_mean[lam],
-                                          mlce[lam],
-                                          h_metric_mean,
-                                          h_metric_std,
-                                          half_width_vector[lam]/2,
-                                          half__,
-                                          min_tan_map_L,
-                                          max_tan_map_L,
-                                          std_tan_map_L,
-                                          np.mean(full_width_vector[lam,:]/2, axis=0),
-                                          min_width[lam]/2.,
-                                          max_width[lam]/2.,
-                                          std_width,
-                                          min_widht_orbit
-                                          ])
+
+
+    #y_{\\mathrm{hw}} shape: (_lambda_1_range)
+    half__ = half_width_vector/2.
+    mlce_max = np.max(mLCE, axis = _axis)
+    min_tan_map_L = np.min(output_matrix, axis = _axis )
+    max_tan_map_L = np.max(output_matrix, axis = _axis )
+    std_tan_map_L = np.std(output_matrix, axis = _axis )
+    std_width = np.std(full_width_vector, axis = _axis )
+    h_metric_mean = np.mean(metric_entropy_vector, axis = _axis)*array_lambda_1
+    h_metric_std = np.std(metric_entropy_vector, axis = _axis)*array_lambda_1
+    min_widht_orbit = np.min(full_width_vector, axis = _axis)
+    #Half-witdh of the max of mLCE (Tangent Map)
+    mask_output_matrix = np.apply_along_axis(mask_gather, 0, output_matrix, (max_tan_map_L,))
+    mask_output_matrix = mask_output_matrix[0]
+
+    y_max_tangent_map = full_width_vector[mask_output_matrix] / 2.
+
+
+
+    array_to_file[:, 9:] = np.column_stack([
+                                      np.mean(output_matrix, axis=_axis),
+                                      mlce_max,
+                                      mLCE_M,
+                                      mLCE_mean,
+                                      mlce,
+                                      h_metric_mean,
+                                      h_metric_std,
+                                      half_width_vector/2,
+                                      half__,
+                                      min_tan_map_L,
+                                      max_tan_map_L,
+                                      std_tan_map_L,
+                                      np.mean(full_width_vector/2, axis=_axis),
+                                      min_width/2.,
+                                      max_width/2.,
+                                      std_width,
+                                      min_widht_orbit,
+                                      y_max_tangent_map
+                                      ])
 
     file_name = f"{directory}/data_{suffix}.dat"
     save_output_to_file(array_to_file, file_name)
