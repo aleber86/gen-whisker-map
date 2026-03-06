@@ -9,5 +9,3 @@ data/*
 
 #any back_up_data
 back_up_data/
-*.map
-data/*.map
