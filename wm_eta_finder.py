@@ -182,8 +182,6 @@ class Experiment_execution(Evolution_eta_finder):
 
         #FULL-WITH OF THE LAYER
         #Collapse over ensemble axis, new shape (eta, lambda_1)
-        start_time = time.time()
-        print(f"Start time: {time.strftime('%H:%M:%S')}")
         full_width_vector_per_initial_condition = np.max(self.max_width_matrix, axis=ensemble_axis)\
             - np.min(self.min_width_matrix, axis=ensemble_axis)
         _to_aux_file = np.zeros((self._lambda_1_range, 7))
@@ -203,13 +201,42 @@ class Experiment_execution(Evolution_eta_finder):
             print(f"Lambda_1:{lambda_1_el}  lambda_2: {lambda_2}  omega_2: {omega_2}")
             print(f"mLCE:{mLCE}  half: {half_width}  c: {c}  v: {v}")
             _to_aux_file[ind, :] = np.array([lambda_1_el, lambda_2, omega_2,  mu_val,c, v, half_width])
-        end_time = (time.time() - start_time)/3600
-        print("Time elapsed: ", end_time)
         np.savetxt(self.file_output_name, _to_aux_file)
+
+    def save_raw_data(self, save : bool = False):
+        raw_data = (self.max_width_matrix - self.min_width_matrix)/2.
+        file_conent = f"""#File content:
+#Time stamp: Start time: {time.strftime('%H:%M:%S')}
+#Number of iterations: {self._max_iter}
+#Number of initial conditions: {self._dim_ensemble}
+#Number of eta values: {self._dim_eta}
+#Number of lambda values: {self._lambda_1_range}
+#Ordered index blocks as:
+#   Index of initial condition
+#   lambda_1        half_width_eta_0    half_width_eta_1 -----> half_width_eta_{self._dim_eta}
+#"""
+
+        if save:
+            with open(f"raw_half_width_{self.file_output_name}.dat", "w") as file_raw:
+                file_raw.write(file_conent)
+                file_raw.write('#\n')
+                for initial_cond_index in np.arange(self._dim_ensemble):
+                    file_raw.write(f'#Index {initial_cond_index}\n')
+                    file_raw.write('#\n')
+                    for index_lambda, lambda_value in enumerate(self._lambda_1):
+                        file_raw.write(f"{lambda_value} ")
+                        for index_eta in np.arange(self._dim_eta):
+                            file_raw.write(f"{raw_data[initial_cond_index,index_eta,index_lambda]} ")
+                        file_raw.write("\n")
+                        file_raw.write("\n")
+
+
+
+
         #
 
 if __name__ == '__main__':
-    map_aguments = {'iteration_time' : 10**7,
+    map_aguments = {'iteration_time' : 10**6,
                     'initial_condition_size' : 256,
                     'free_parameter_size' : 40,
                     'omega_2_size' : 1,
@@ -228,5 +255,10 @@ if __name__ == '__main__':
     STATUS = "wm_eta_found.dat"
     Experiment_execution_instance = Experiment_execution(STATUS, arguments_of_the_map=map_aguments)
     Experiment_execution_instance.set_program_script('./kernel_lambda_1_form.cl')
+    print(f"Start time: {time.strftime('%H:%M:%S')}")
+    start_time = time.time()
     Experiment_execution_instance.execute_experiment(opencl_arguments_structure)
     Experiment_execution_instance.digest_statistics()
+    end_time = (time.time() - start_time)/3600
+    print("Time elapsed: ", end_time)
+    Experiment_execution_instance.save_raw_data()
