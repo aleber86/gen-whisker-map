@@ -1,4 +1,58 @@
-"""Calculo de 'whisker map' generalizado"""
+"""
+Script calculates a generalized separatrix map (generalized whisker map) proposed
+by Chirikov (1979) to estimate the diffusion coefficient in Arnold's model (Arnold 1964).
+The map has 2 phase variables (t,x) and 1 action-like variable (y) afected by a term \\upsilon that
+depends heavily on a frequency \\omega_2.
+Chirikov (1979) obtains the diffusion coefficient under the assumption that, when one of the
+phase variables is correlated, the other is random. If \\upsilon << 1 and \\omega_2 > 1 then t is correlated,
+and x is random. However, if \\upsilon >> 1 and 0 < \\omega_2 < 1 then x is correlated and t is random
+(see Cincotta et al., 2022).
+
+
+
+* The output of the model contains:
+
+-   Porosity of the layer.
+-   Half-width of the layer.
+-   Maximal Lyapunov characteristic exponent.
+-   Metric entropy.
+-   Phase correlations using Shannon entropy (implementation of Information defined by Cincotta & Giordano, 2018).
+
+*
+
+As a generalized separatrix map we may use it to calculate the case of
+\\omega_2 = 0, and get the pendullum separatrix map.
+
+
+*****For an extended explanaiton of the code,  see:
+
+http://sedici.unlp.edu.ar/handle/10915/189876
+"Estudio del mapa de la separatriz generalizado", ch. 7.
+                                                   *****
+
+
+Python / OpenCL program.
+Python : (pyopencl, numpy) HOST -> DEVICE (GPU) -> HOST transfers. Statistics calculations.
+OpenCL : Paralelized heavy-duty work. Evolution of the dynamical system defined for the map.
+
+Testd on AMD architectures: RDNA 2.0 (RX 6700 XT) and CGN 5.0 (Vega 20).
+
+--------------------------------------------------------------------------------------------
+Arnold, V. I. (1964). On the instability of dynamic systems with many degrees of
+freedom. Dokl. Akad, Nauk SSSR.
+
+Chirikov, B. V. (1979). A universal instability of many-dimensional oscillator sys-
+tems. Physics Reports, 52(5):263–379.
+
+
+Cincotta, P. M. y Giordano, C. M. (2018). Phase correlations in chaotic dyna-
+mics: a Shannon entropy measure. Celestial Mechanics and Dynamical Astronomy,
+130(11):74.
+
+Cincotta, P. M., Giordano, C. M., y Shevchenko, I. I. (2022). Diffusion and Lyapunov
+timescales in the Arnold model. Phys. Rev. E, 106:044205.
+
+"""
 
 import pyopencl as cl
 import numpy as np
@@ -457,6 +511,7 @@ def main():
     OCL_Object.free_buffer("counter_array_collision_x_device")
     #*****************************************************************************************
 
+    #*****************************************************************************************
     #Statistics calculations
     #*****************************************************************************************
     _axis = 1
