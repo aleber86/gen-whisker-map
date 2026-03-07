@@ -146,46 +146,6 @@ for ind in np.arange(_lambda_1_range):
     print(f"Lambda_1:{lambda_1_el}  lambda_2: {lambda_2}  omega_2: {omega_2}")
     print(f"mLCE:{mLCE}  half: {half_width}  c: {c}  v: {v}")
     _to_aux_file[ind, :] = np.array([lambda_1_el, lambda_2, omega_2,  mu_val,c, v, half_width])
-"""
-
-THIS USES THE HALF-WIDTH AND mLCE OF THE LAST ORBIT INSIDE THE LAYER
-
-
-
-half_width_vector = max_width_matrix - min_width_matrix
-for ind in np.arange(_lambda_1_range):
-
-    mLCE_vec = output_matrix[:, :, ind]
-    mLCE = np.max(mLCE_vec)
-    index = np.where(mLCE_vec[:,:] == mLCE)
-    half_width = np.min(half_width_vector[index[0], :, ind])/2
-    #COMMENT
-    half_width = np.max(half_width_vector[:,:,ind], axis=0)
-#    print(half_width_vector)
-    half_width_min = np.min(half_width)
-#    print(half_width_min)
-    #index = np.where(half_width_vector[:,:,ind] == half_width)
-    index_1 = np.where(half_width == half_width_min)
-    half_width = half_width_min/2.
-    #mLCE_vec = output_matrix[index[0], index[1], ind]
-    mLCE_vec = output_matrix[:, index_1[0][0], ind]
-    mLCE = np.max(mLCE_vec)
-
-    #c = array_initial_conditions_eta[ind,index[1][0]]
-    print(index_1[0][0])
-    c = array_initial_conditions_eta[index_1[0][0]]
-    #mu_val = mu[index[1][0]]
-    mu_val = mu[index_1[0][0]]
-#    mu_val = 0
-    lambda_2 = array_lambda_2[ind]
-    lambda_1_el = array_lambda_1[ind]
-    omega_2 = array_omega_2[0]
-    v = array_v[ind]
-    print(f"Lambda_1:{lambda_1_el}  lambda_2: {lambda_2}  omega_2: {omega_2}")
-    print(f"mLCE:{mLCE}  half: {half_width}  c: {c}  v: {v}")
-    _to_file[ind, :] = np.array([lambda_1_el, lambda_2, omega_2,  mLCE, half_width, c, v])
-    _to_aux_file[ind, :] = np.array([lambda_1_el, lambda_2, omega_2,  mu_val,c, v, half_width])
-"""
 end_time = (time.time() - start_time)/3600
 np.savetxt(file_aux, _to_aux_file)
 #

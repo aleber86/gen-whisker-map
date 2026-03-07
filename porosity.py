@@ -163,7 +163,7 @@ def main():
     _common_gid_2_size = 128 # Size of chunks in lambda space. Change at will
     _save_maps = False # Save map flag. True, saves _lambda_1_range_map_out number per chunk
     _save_collisions = False # Save collision values flag. True, saves the difference between total points and rastered.
-    _gwm_flag = _wpushort(1) # GENERALIZED WHISKER MAP. True, calc (x,t,y). False (t,y)
+    _gwm_flag = _wpushort(0) # GENERALIZED WHISKER MAP. True, calc (x,t,y). False (t,y)
 
 
 

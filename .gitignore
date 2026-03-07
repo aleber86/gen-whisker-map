@@ -1,9 +1,6 @@
 #pycache
 */__pycache__/*.pyc
 
-#any data output
-data/*
-
 #output/input
 *.dat
 
