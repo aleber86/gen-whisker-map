@@ -158,7 +158,7 @@ def main():
     SPREAD = _wp(1.e-7) #Spread of ensemble
     _max_iter = _wpui(10**_it_step) #Iteration time function of _it_step
     _dim_ensemble = _wpui(256) #Ensemble size
-    _lambda_1_range = _wpui(1536) #Use 128 multiple
+    _lambda_1_range = _wpui(128) #Use 128 multiple
     _lambda_1_range_map_out = _wpui(1) #Maps to save as graphics! This could skyrocket the memory usage
     _common_gid_2_size = 128 # Size of chunks in lambda space. Change at will
     _save_maps = False # Save map flag. True, saves _lambda_1_range_map_out number per chunk
@@ -223,7 +223,7 @@ def main():
     array_initial_conditions = np.array(np.random.uniform(-1,1, (_dim_ensemble, 3)), dtype=_wp) * _wp(SPREAD)
 
     #Read model paramenters from file
-    with open('./pre_cached_wm_128_elements.dat', 'r') as file:
+    with open('./data/aux_eta_pre_cached_10000000_eta_size_1_rand_seed_34567890_gwm_256_eta_7_2.5.dat', 'r') as file:
         array_file_initial_conditions = np.loadtxt(file, dtype = _wp)
 
     array_lambda_1 = array_file_initial_conditions[:,0].copy()

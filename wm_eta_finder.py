@@ -5,150 +5,228 @@ import numpy as np
 from mod_opencl.opencl_class_device import OpenCL_Object
 import time
 
-print(time.localtime(time.time()))
-STATUS = "gwm_eta_finder_256_elements_omega_2_2.5"
+#Environment definitions
 _wp = np.float64 # Working Precision
 _wpi = np.int32 # Integer precision (for OpenCL arguments)
 _random_seed = 34567890
-#_random_seed = 547891248
-np.random.seed(_random_seed)
 _pi = 4.0*np.arctan(1.0) # System definition of pi
-_max_iter = 10**7 # Iteration time
-_dim_essamble = 256 # Ensemble of iniitial conditions
-#Change _dim_eta size of the eta uniform distribution
-_dim_eta = 40
-_omega_2_range = 1
-#Change the _lambda_1_range for lambda calc. (use 128 multiple)
-_lambda_1_range  = 128
-_SPREAD = _wp(1.e-7) # Spread around (0,0,0) of initial conditions
-#************************************************************************************
-# Do not change this. Global problem size (OpenCL)
-_g_size_0 = _dim_essamble
-_g_size_1 = _dim_eta
-_g_size_2 = _lambda_1_range
-_local = (4,4,4)
-#************************************************************************************
-_step = 0.01
-_omega_2_ini = _wp(np.sqrt(2.5)) # Could let this unchanged if you use only WM
-#************************************************************************************
-# GENERALIZED WHISKER MAP FLAG!
-#
-# if _gwm = True, then it will calculate eta value for the generalized whisker map
-_gwm = True
-_ONE_ETA_FLAG = _wpi(0)
-_v_zero = _wp(0.)
-_GWM_FLAG = _wpi(0)
-if _gwm:
-    _v_zero = _wp(1.)
-    _GWM_FLAG = _wpi(1)
-#************************************************************************************
+np.random.seed(_random_seed)
 
-#***************************************************************************************
-#initial_conditions = (x,t,y)
-# Change lambda_ini for the starting lambda value !!!!
-lambda_ini = _wp(15.) # <----------------Change it if you want to calc. another interval
-# *************************************************************************************
-#
-lambda_1 = np.array([lambda_ini + _step*lam for lam in np.arange(_lambda_1_range)])
-epsilon = 1./lambda_1**2
-denom = _wp(epsilon*np.sinh(0.5*_pi*lambda_1))
-mu = np.array([np.random.uniform(1.e-12,1.e-8) for _ in np.arange(_dim_eta)], dtype=_wp)
-initial_conditions = np.array(np.random.uniform(-1,1, (_dim_essamble, 3)), dtype = _wp)*_SPREAD
+class Evolution_eta_finder:
+    _ONE_ETA_FLAG = _wpi(1)
+    _GWM_FLAG = _wpi(0)
+    _EXPLICIT_ETA = _wpi(1)
+    def __init__(self,  arguments : dict):
+        self._max_iter = arguments['iteration_time']
+        self._dim_ensemble = arguments['initial_condition_size']
+        self._dim_eta = arguments['free_parameter_size']
+        self._omega_2_range = arguments['omega_2_size']
+        self._lambda_1_range = arguments['lambda_1_size']
+        self._lambda_1_ini = arguments['lambda_1_ini']
+        self._SPREAD = arguments['spread_from_center']
+        self._step = arguments['lambda_1_step']
+        self._omega_2_ini = arguments['omega_2_initial_condition']
+        self.is_gwm = arguments['gen_whisker_map']
+        self.explicit_eta = arguments['explicit_eta']
+        self.__FLAGS()
+        self._lambda_1 = self.set_lambda_1_initial_conditions()
+        self.initial_conditions = self.set_initial_condition_xty()
+        self.initial_conditions_eta = self.set_initial_conditions_free_parameter()
+        self.initial_conditions_omega_2 = self.set_initial_conditions_omega_2()
+        self.upsilon = self.set_upsilon(self.is_gwm)
+        self._lambda_2 = self._lambda_1 * self.initial_conditions_omega_2
+        self.mu = self.set_mu()
 
-#Initial conditions eta random****************************************************************
-initial_conditions_eta = np.random.uniform(0.01, 2.*_pi, size=_dim_eta)
-initial_conditions_eta[np.where(initial_conditions_eta<0.)] = initial_conditions_eta[np.where(initial_conditions_eta<0.)] + 2.*_pi
-#**********************************************************************************************
-array_initial_conditions = np.array(initial_conditions, dtype=_wp)
-array_initial_conditions_eta = np.array(initial_conditions_eta, dtype=_wp)
-array_omega_2 = np.array([_omega_2_ini + _step * i for i in np.arange(_omega_2_range)], dtype=_wp)
+    def __FLAGS(self):
+        if self.is_gwm:
+            self._GWM_FLAG = _wpi(1)
+        if self.explicit_eta is None:
+            self._ONE_ETA_FLAG = _wpi(0)
+            self._EXPLICIT_ETA = _wpi(0)
 
-array_lambda_2 = array_omega_2[0] * lambda_1
-array_v = array_omega_2**2 *np.sinh(_pi*lambda_1/2.)/np.sinh(lambda_1*_pi/2.*array_omega_2)
-array_v = array_v * _v_zero
-array_lambda_1 = lambda_1
+    def set_lambda_1_initial_conditions(self) -> np.array:
+        lambda_1 = np.array([self._lambda_1_ini + self._step*lam for lam in np.arange(self._lambda_1_range)])
+        lambda_1.astype(_wp)
+        return lambda_1
 
 
-#output_matrix -> CPU
-_to_file = np.zeros((_lambda_1_range, 7))
-_to_aux_file = np.zeros((_lambda_1_range, 7))
+    def set_initial_condition_xty(self):
 
-output_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range))
-max_width_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range), dtype=_wp)
-min_width_matrix = np.zeros((_dim_essamble, _dim_eta, _lambda_1_range), dtype=_wp)
-#*****************************************************************************************************
-#OpenCL Memory buffers
-OCL_Object = OpenCL_Object()
-start_time = time.time()
-#Buffer CPU -> GPU
-OCL_Object.buffer_global(array_initial_conditions, "initial_conditions", False)
-OCL_Object.buffer_global(array_initial_conditions_eta, "initial_conditions_eta", False)
-OCL_Object.buffer_global(array_omega_2, "omega_2", False)
-OCL_Object.buffer_global(array_v, "v", False)
-OCL_Object.buffer_global(array_lambda_2, "lambda_2", False)
-OCL_Object.buffer_global(array_lambda_1, "lambda_1", False)
-OCL_Object.buffer_global(output_matrix, "output_matrix")
-OCL_Object.buffer_global(max_width_matrix, "max_width_matrix")
-OCL_Object.buffer_global(min_width_matrix, "min_width_matrix")
-OCL_Object.buffer_global(mu, "mu")
-#***********************************************************************************************************
-#Program load and build. If you want to add opt, do it inside list [], e.g. ["-cl-single-precision-constant"]
-#Do not recomend using any 'fast math' optimization
-with open('kernel_lambda_1_form.cl', 'r') as file_to_change:
-    script = file_to_change.read()
-    script = script.replace("#define MAXITER", f"#define MAXITER {_max_iter}")
-with open('kernel_lambda_1.cl', 'w') as file:
-    file.write(script)
-OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
-#************************************************************************************************************
-_max_iter = _wpi(_max_iter)
+        initial_conditions = np.array(np.random.uniform(-1,1, (self._dim_ensemble, 3)), dtype = _wp)*self._SPREAD
+        return initial_conditions
 
-ev_1 = OCL_Object.kernel.gen_whisker_map(OCL_Object.queue,(_g_size_0, _g_size_1, _g_size_2),_local,
-                                    OCL_Object.initial_conditions_device,
-                                    OCL_Object.output_matrix_device,
-                                    OCL_Object.max_width_matrix_device,
-                                    OCL_Object.min_width_matrix_device,
-                                    OCL_Object.lambda_1_device,
-                                    OCL_Object.lambda_2_device,
-                                    OCL_Object.v_device,
-                                    OCL_Object.initial_conditions_eta_device,
-                                    OCL_Object.omega_2_device, _max_iter,
-                                    OCL_Object.mu_device,
-                                    _GWM_FLAG,
-                                    _ONE_ETA_FLAG)
-cl.wait_for_events([ev_1])
-cl.enqueue_copy(OCL_Object.queue, output_matrix, OCL_Object.output_matrix_device)
-cl.enqueue_copy(OCL_Object.queue, max_width_matrix, OCL_Object.max_width_matrix_device)
-cl.enqueue_copy(OCL_Object.queue, min_width_matrix, OCL_Object.min_width_matrix_device)
+    def set_initial_conditions_free_parameter(self):
+
+        if self.explicit_eta is None:
+            initial_conditions_eta = np.random.uniform(0.01, 2.*_pi, size=self._dim_eta)
+            initial_conditions_eta[np.where(initial_conditions_eta<0.)] = \
+                initial_conditions_eta[np.where(initial_conditions_eta<0.)] + 2.*_pi
+        else:
+            initial_conditions_eta = np.ones((self._dim_eta,), dtype=_wp)
+        initial_conditions_eta.astype(_wp)
+        return initial_conditions_eta
+
+    def set_initial_conditions_omega_2(self):
+        array_omega_2 = np.array([self._omega_2_ini + self._step * i\
+                                  for i in np.arange(self._omega_2_range)], dtype=_wp)
+        return array_omega_2
+
+    def set_upsilon(self, gen_whisker_map = True) -> np.array:
+        _v_zero = 0.
+        if gen_whisker_map:
+            _v_zero = 1.
+        array_upsilon = self.initial_conditions_omega_2**2 *np.sinh(_pi*self._lambda_1/2.)\
+            /np.sinh(self._lambda_1*_pi/2.*self.initial_conditions_omega_2)
+
+        array_upsilon = array_upsilon * _v_zero
+
+        return array_upsilon
+
+    def set_mu(self) -> np.array:
+
+        mu = np.array([np.random.uniform(1.e-12,1.e-8)\
+                       for _ in np.arange(self._dim_eta)], dtype=_wp)
+        return mu
 
 
-file_name_aux = f"data/aux_{_max_iter}_eta_size_{_dim_eta}"\
-           +f"_rand_seed_{_random_seed}_omega_2_range_{_omega_2_range}_wm_lambda_{STATUS}.dat"
+class Experiment_execution(Evolution_eta_finder):
+    def __init__(self, name_file_output : str, arguments_of_the_map : dict):
+        Evolution_eta_finder.__init__(self, arguments_of_the_map)
+        self.file_output_name = name_file_output
+        self.OCL_Object = OpenCL_Object()
+        #Host side buffers
+        self.output_mLCE_matrix = np.zeros((self._dim_ensemble,\
+                                            self._dim_eta, self._lambda_1_range), dtype=_wp)
 
-file_aux = open(file_name_aux, 'w')
-#******************************************************************************************
-#HALF-WITH OF THE LAYER
-half_width_vector = np.max(max_width_matrix, axis=0) - np.min(min_width_matrix, axis=0)
-#******************************************************************************************
-for ind in np.arange(_lambda_1_range):
+        self.max_width_matrix = np.zeros((self._dim_ensemble,\
+                                          self._dim_eta, self._lambda_1_range), dtype=_wp)
 
-    half_width = np.min(half_width_vector[:,ind], axis=0)
-    index_1 = np.where(half_width_vector == half_width)
-    half_width = half_width/2.
-    mLCE_vec = output_matrix[:, index_1[0], ind]
-    mLCE = np.max(mLCE_vec)
-    c = array_initial_conditions_eta[index_1[0][0]]
-    mu_val = mu[index_1[0][0]]
-    lambda_2 = array_lambda_2[ind]
-    lambda_1_el = array_lambda_1[ind]
-    omega_2 = array_omega_2[0]
-    v = array_v[ind]
-    print(f"Lambda_1:{lambda_1_el}  lambda_2: {lambda_2}  omega_2: {omega_2}")
-    print(f"mLCE:{mLCE}  half: {half_width}  c: {c}  v: {v}")
-    _to_aux_file[ind, :] = np.array([lambda_1_el, lambda_2, omega_2,  mu_val,c, v, half_width])
-end_time = (time.time() - start_time)/3600
-np.savetxt(file_aux, _to_aux_file)
-#
+        self.min_width_matrix = np.zeros((self._dim_ensemble,\
+                                          self._dim_eta, self._lambda_1_range), dtype=_wp)
+        self.__create_device_buffers()
 
+    def __create_device_buffers(self):
 
-print(f"Total time: {end_time}")
+        self.OCL_Object.buffer_global(self.initial_conditions, "initial_conditions", False)
+        self.OCL_Object.buffer_global(self.initial_conditions_eta, "initial_conditions_eta", False)
+        self.OCL_Object.buffer_global(self.initial_conditions_omega_2, "omega_2", False)
+        self.OCL_Object.buffer_global(self.upsilon, "v", False)
+        self.OCL_Object.buffer_global(self._lambda_2, "lambda_2", False)
+        self.OCL_Object.buffer_global(self._lambda_1, "lambda_1", False)
+        self.OCL_Object.buffer_global(self.output_mLCE_matrix, "output_matrix")
+        self.OCL_Object.buffer_global(self.max_width_matrix, "max_width_matrix")
+        self.OCL_Object.buffer_global(self.min_width_matrix, "min_width_matrix")
+        self.OCL_Object.buffer_global(self.mu, "mu")
+
+    def set_program_script(self, program_form : str = 'kernel_lambda_1_form.cl',\
+                           inculuded =['kernel_lambda_1.cl',\
+                                       'src/jacobian.cl', 'src/modulus.cl']) -> None:
+
+        with open(program_form, 'r') as file_to_change:
+            script = file_to_change.read()
+            script = script.replace("#define MAXITER", f"#define MAXITER {self._max_iter}")
+        with open('kernel_lambda_1.cl', 'w') as file:
+            file.write(script)
+        self.OCL_Object.program(inculuded, ['-I ./includes'])
+
+    def execute_experiment(self, opencl_arguments : dict) -> None:
+        _global_size = opencl_arguments['global_size']
+        _local_size = opencl_arguments['local_size']
+
+        _max_iter = _wpi(self._max_iter)
+        ev_1 =self.OCL_Object.kernel.gen_whisker_map(self.OCL_Object.queue, _global_size, _local_size,
+                                            self.OCL_Object.initial_conditions_device,
+                                            self.OCL_Object.output_matrix_device,
+                                            self.OCL_Object.max_width_matrix_device,
+                                            self.OCL_Object.min_width_matrix_device,
+                                            self.OCL_Object.lambda_1_device,
+                                            self.OCL_Object.lambda_2_device,
+                                            self.OCL_Object.v_device,
+                                            self.OCL_Object.initial_conditions_eta_device,
+                                            self.OCL_Object.omega_2_device, _max_iter,
+                                            self.OCL_Object.mu_device,
+                                            self._GWM_FLAG,
+                                            self._ONE_ETA_FLAG,
+                                            self._EXPLICIT_ETA)
+        cl.wait_for_events([ev_1])
+        ev_copy_1 = cl.enqueue_copy(self.OCL_Object.queue,\
+                        self.output_mLCE_matrix, self.OCL_Object.output_matrix_device)
+        ev_copy_2 = cl.enqueue_copy(self.OCL_Object.queue,\
+                        self.max_width_matrix, self.OCL_Object.max_width_matrix_device)
+        ev_copy_3 = cl.enqueue_copy(self.OCL_Object.queue,\
+                        self.min_width_matrix, self.OCL_Object.min_width_matrix_device)
+
+        cl.wait_for_events([ev_copy_1, ev_copy_2, ev_copy_3])
+
+    def __mask_finder_ensamble(self, array_in : np.array,\
+                               array_comp : np.array) -> np.array:
+
+        """
+        Function compares the values in array_comp with array_in to get the mask
+
+        Args:
+            array_in : array of values to be compared
+            array_comp : array of values to comapre
+
+        Returns:
+            mask : array of bool
+        """
+        mask = False
+        print(array_in.shape)
+        print(array_comp[0].shape)
+        mask = array_in == array_comp
+
+        return mask
+
+    def digest_statistics(self, ensemble_axis = 0, eta_axis = 0) -> np.array:
+
+        #FULL-WITH OF THE LAYER
+        #Collapse over ensemble axis, new shape (eta, lambda_1)
+        start_time = time.time()
+        print(f"Start time: {time.strftime('%H:%M:%S')}")
+        full_width_vector_per_initial_condition = np.max(self.max_width_matrix, axis=ensemble_axis)\
+            - np.min(self.min_width_matrix, axis=ensemble_axis)
+        _to_aux_file = np.zeros((self._lambda_1_range, 7))
+        for ind in np.arange(self._lambda_1_range):
+
+            full_width = np.min(full_width_vector_per_initial_condition[:,ind], axis=0)
+            index_1 = np.where(full_width_vector_per_initial_condition == full_width)
+            half_width = full_width/2.
+            mLCE_vec = self.output_mLCE_matrix[:, index_1[0], ind]
+            mLCE = np.max(mLCE_vec)
+            c = self.initial_conditions_eta[index_1[0][0]]
+            mu_val = self.mu[index_1[0][0]]
+            lambda_2 = self._lambda_2[ind]
+            lambda_1_el = self._lambda_1[ind]
+            omega_2 = self.initial_conditions_omega_2[0]
+            v = self.upsilon[ind]
+            print(f"Lambda_1:{lambda_1_el}  lambda_2: {lambda_2}  omega_2: {omega_2}")
+            print(f"mLCE:{mLCE}  half: {half_width}  c: {c}  v: {v}")
+            _to_aux_file[ind, :] = np.array([lambda_1_el, lambda_2, omega_2,  mu_val,c, v, half_width])
+        end_time = (time.time() - start_time)/3600
+        print("Time elapsed: ", end_time)
+        np.savetxt(self.file_output_name, _to_aux_file)
+        #
+
+if __name__ == '__main__':
+    map_aguments = {'iteration_time' : 10**7,
+                    'initial_condition_size' : 256,
+                    'free_parameter_size' : 40,
+                    'omega_2_size' : 1,
+                    'lambda_1_size' : 1536,
+                    'lambda_1_ini' : _wp(5.0),
+                    'lambda_1_step' : _wp(0.01),
+                    'spread_from_center' : _wp(1.e-7),
+                    'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
+                    'gen_whisker_map' : False,
+                    'explicit_eta' : None,
+                    }
+    opencl_arguments_structure = {'global_size' : (map_aguments['initial_condition_size'],
+                                                   map_aguments['free_parameter_size'],
+                                                   map_aguments['lambda_1_size']),
+                                  'local_size' : (4,4,4)}
+    STATUS = "wm_eta_found.dat"
+    Experiment_execution_instance = Experiment_execution(STATUS, arguments_of_the_map=map_aguments)
+    Experiment_execution_instance.set_program_script('./kernel_lambda_1_form.cl')
+    Experiment_execution_instance.execute_experiment(opencl_arguments_structure)
+    Experiment_execution_instance.digest_statistics()

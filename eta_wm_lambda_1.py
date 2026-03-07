@@ -7,7 +7,7 @@ from mod_functions.object_class_functions import File_reader
 import time
 
 def main():
-    STATUS = "gwm_128_eta_7_2.5"
+    STATUS = "gwm_256_eta_7_2.5"
     _wp = np.float64 # Working Precision
     _wpi = np.int32 # Integer precision for OpenCL kernel args
     start_time = time.time()
@@ -15,18 +15,19 @@ def main():
     np.random.seed(_random_seed)
     _pi = 4.0*np.arctan(1.0) # Pi definition
     _max_iter = 10**7 # Iteration time
-    _dim_essamble = 128 # Ensemble size
+    _dim_essamble = 256 # Ensemble size
     _dim_eta = 1 # Allways 1 <- Global size argument
-    _lambda_1_range = 1536 # Lambda_1 number of items, use multiple of 128
+    _lambda_1_range = 128 # Lambda_1 number of items, use multiple of 128
     _g_size_0 = _dim_essamble
     _g_size_1 = _dim_eta
     _g_size_2 = _lambda_1_range
-    _local = (8,1,4) # Local dimension. Change it for device saturation
+    _local = (16,1,4) # Local dimension. Change it for device saturation
     _SPREAD = _wp(10.**-7.)
     #_omega_2_ini = _wp(np.sqrt(_pi/3.)+2.)
     _omega_2_ini = _wp(np.sqrt(2.5)) # Omega_2 value. Set on irrational
     # GENERALIZED WHISKER MAP FLAG***************************************
-    _gwm = True
+    _gwm = False
+    _EXPLITIC_ETA = _wpi(1)
     _GWM_FLAG = _wpi(0)
     _v_zero = _wp(0.)
     _ONE_ETA_FLAG = _wpi(1)
@@ -37,6 +38,7 @@ def main():
     #*********************************************************************
     _explicit_eta = False
 
+    """
     lambda_1_list = []
     lambda_2_list = []
     omega_2_list = []
@@ -46,27 +48,40 @@ def main():
     half_list = []
 
     all_readed = [lambda_1_list, lambda_2_list, omega_2_list, mu_list, eta_list, v_list, half_list]
-    reader = File_reader('aux_pre_cached.dat')
+    reader = File_reader('./gwm_eta_finder_256_elements_omega_2_2.5')
     reader.read_file()
     data_read = reader.get_data()
     for data_stored in data_read:
         for index, arguments in enumerate(all_readed):
             arguments.append(data_stored[index])
+    """
     #initial_conditions = (x,t,y)
+    with open("./gwm_eta_finder_256_elements_omega_2_2.5", "r") as file:
+        array_input = np.loadtxt(file)
+
+    array_lambda_1 = array_input[:,0].copy()
+    array_lambda_2 = array_input[:,1].copy()
+    array_omega_2 = array_input[:,2].copy()
+    mu = array_input[:,3].copy()
+    array_initial_conditions_eta = array_input[:,4].copy()
+    array_v = array_input[:,5].copy() * _v_zero
     initial_conditions = np.array(np.random.uniform(-1,1, (_dim_essamble, 3)), dtype = _wp)*_SPREAD
     array_initial_conditions = np.array(initial_conditions, dtype=_wp)
+    array_omega_2 = np.ones(array_omega_2.shape, dtype = _wp) * _omega_2_ini
+    """
     lambda_1 = np.array(lambda_1_list, dtype = _wp)
     #lambda_1 = np.ones((_lambda_1_range,), dtype=_wp) * _LAMBDA_1
     array_omega_2 = np.array(omega_2_list, dtype = _wp)
-    array_omega_2 = np.ones(array_omega_2.shape, dtype = _wp) * _omega_2_ini
     mu = np.array(mu_list, dtype = _wp)
 
     array_lambda_2 = array_omega_2[0] * lambda_1
     array_v = array_omega_2**2 *np.sinh(_pi*lambda_1/2.)/np.sinh(lambda_1*_pi/2.*array_omega_2) * _v_zero
     array_lambda_1 = lambda_1
     array_initial_conditions_eta = np.array(eta_list, dtype = _wp)
+    """
     if _explicit_eta:
         eta_explicit = _wp(4.2)
+        _EXPLITIC_ETA = _wpi(1)
         #eta_explicit = np.linspace(0,2*_pi,_lambda_1_range)
         #eta_explicit = lambda_1*_wp(3.57012) + np.ones(lambda_1.shape, dtype = _wp) * _wp(-11.189)
 
@@ -118,17 +133,14 @@ def main():
                                         OCL_Object.omega_2_device, _max_iter,
                                         OCL_Object.mu_device,
                                         _GWM_FLAG,
-                                        _ONE_ETA_FLAG)
+                                        _ONE_ETA_FLAG,
+                                        _EXPLITIC_ETA)
     cl.wait_for_events([ev_1])
     cl.enqueue_copy(OCL_Object.queue, output_matrix, OCL_Object.output_matrix_device)
     cl.enqueue_copy(OCL_Object.queue, max_width_matrix, OCL_Object.max_width_matrix_device)
     cl.enqueue_copy(OCL_Object.queue, min_width_matrix, OCL_Object.min_width_matrix_device)
 
 
-    file_name_aux = f"data/aux_eta_pre_cached_{_max_iter}_eta_size_{_dim_eta}"\
-               +f"_rand_seed_{_random_seed}_{STATUS}.dat"
-
-    file_aux = open(file_name_aux, 'w')
     half_width_vector = np.max(max_width_matrix, axis=0) - np.min(min_width_matrix, axis=0)
     for ind in np.arange(_lambda_1_range):
 
@@ -149,10 +161,14 @@ def main():
         _to_aux_file[ind, :] = np.array([lambda_1_el, lambda_2, omega_2,  mu_val,c, v, half_width])
 
 
-    end_time = (time.time() - start_time)/3600
-    np.savetxt(file_aux, _to_aux_file)
+    file_name_aux = f"data/aux_eta_pre_cached_{_max_iter}_eta_size_{_dim_eta}"\
+               +f"_rand_seed_{_random_seed}_{STATUS}.dat"
+
+    with open(file_name_aux, 'w') as file_aux:
+        np.savetxt(file_aux, _to_aux_file)
     #
 
+    end_time = (time.time() - start_time)/3600
     print(f"Total time: {end_time}")
 
 

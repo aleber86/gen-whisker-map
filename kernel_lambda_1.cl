@@ -16,7 +16,8 @@ __kernel void gen_whisker_map(__global double *initial_conditions,
         int dimension,
         __global double* mu,
         int GWM_FLAG,
-        int ONE_ETA_FLAG){
+        int ONE_ETA_FLAG,
+        int EXPLICIT_ETA){
 
     int gid_0 = get_global_id(0);
     int gsz_0 = get_global_size(0);
@@ -46,6 +47,9 @@ __kernel void gen_whisker_map(__global double *initial_conditions,
         eta_element = eta[gid_2];
     }
     else{
+        eta_element = eta[gid_1];
+    }
+    if(EXPLICIT_ETA){
         eta_element = eta[0];
     }
     if(GWM_FLAG){
