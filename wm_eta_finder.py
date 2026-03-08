@@ -236,7 +236,7 @@ class Experiment_execution(Evolution_eta_finder):
         #
 
 if __name__ == '__main__':
-    map_aguments = {'iteration_time' : 10**6,
+    map_aguments = {'iteration_time' : 10**2,
                     'initial_condition_size' : 256,
                     'free_parameter_size' : 40,
                     'omega_2_size' : 1,
@@ -252,10 +252,15 @@ if __name__ == '__main__':
                                                    map_aguments['free_parameter_size'],
                                                    map_aguments['lambda_1_size']),
                                   'local_size' : (4,4,4)}
-    STATUS = "wm_eta_found.dat"
+    date = time.strftime('%d-%m-%Y__%H:%M:%S')
+    print(f"Start time: {date}")
+    STATUS = f"data/wm_eta_found_{date}_gwm_{map_aguments['gen_whisker_map']}_it_time_\
+{map_aguments['iteration_time']}_eta_size_\
+{map_aguments['free_parameter_size']}_ensemble_size_\
+{map_aguments['initial_condition_size']}.dat"
+
     Experiment_execution_instance = Experiment_execution(STATUS, arguments_of_the_map=map_aguments)
     Experiment_execution_instance.set_program_script('./kernel_lambda_1_form.cl')
-    print(f"Start time: {time.strftime('%H:%M:%S')}")
     start_time = time.time()
     Experiment_execution_instance.execute_experiment(opencl_arguments_structure)
     Experiment_execution_instance.digest_statistics()
