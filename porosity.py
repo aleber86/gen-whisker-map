@@ -56,9 +56,8 @@ timescales in the Arnold model. Phys. Rev. E, 106:044205.
 
 import pyopencl as cl
 import numpy as np
-from mod_opencl.opencl_class_device import OpenCL_Object
+from wm_eta_finder import Experiment_execution
 import time
-
 
 
 _wp = np.float64 # Working Precision (scientific calc)
@@ -148,438 +147,487 @@ def mask_gather(array_in : np.array, array_comp : np.array) -> np.array:
     return mask
 
 
-def main():
-    directory = "data"
-    _it_step = 7 # Iteration time as powers of 10
-    suffix = f"gwm_{_it_step}_1_pre_catched_256"
-    _random_seed = 34567890
-    #_random_seed = 547891248
-    np.random.seed(_random_seed)
-    SPREAD = _wp(1.e-7) #Spread of ensemble
-    _max_iter = _wpui(10**_it_step) #Iteration time function of _it_step
-    _dim_ensemble = _wpui(256) #Ensemble size
-    _lambda_1_range = _wpui(128) #Use 128 multiple
-    _lambda_1_range_map_out = _wpui(1) #Maps to save as graphics! This could skyrocket the memory usage
-    _common_gid_2_size = 128 # Size of chunks in lambda space. Change at will
-    _save_maps = False # Save map flag. True, saves _lambda_1_range_map_out number per chunk
-    _save_collisions = False # Save collision values flag. True, saves the difference between total points and rastered.
-    _gwm_flag = _wpushort(0) # GENERALIZED WHISKER MAP. True, calc (x,t,y). False (t,y)
+class Experiment_execution_full(Experiment_execution):
+    def __init__(self,output_file : str, arguments_of_the_map : dict):
+        Experiment_execution.__init__(self, output_file, arguments_of_the_map)
 
+        self._save_maps = arguments_of_the_map['save_maps']
+        self._save_collisions = arguments_of_the_map['save_collisions']
+        self._lambda_1_range_map_out = arguments_of_the_map['map_out_lambda_range']
+        self._lambda_1_range_map_out = _wpui(self._lambda_1_range_map_out)
+        self._g_size_0 = arguments_of_the_map['first_kernel']['_g_size_0']
+        self._g_size_1 = arguments_of_the_map['first_kernel']['_g_size_1']
+        self._g_size_2 = arguments_of_the_map['first_kernel']['_g_size_2']
+        self._local_id_0 = arguments_of_the_map['first_kernel']['_local_id_0']
+        self._local_id_1 = arguments_of_the_map['first_kernel']['_local_id_1']
+        self._local_id_2 = arguments_of_the_map['first_kernel']['_local_id_2']
+        self._g_size_0_c = arguments_of_the_map['copy_kernel']['_g_size_0_c']
+        self._g_size_1_c = arguments_of_the_map['copy_kernel']['_g_size_1_c']
+        self._g_size_2_c = arguments_of_the_map['copy_kernel']['_g_size_2_c']
+        self._local_id_0_c = arguments_of_the_map['copy_kernel']['_local_id_0_c']
+        self._local_id_1_c = arguments_of_the_map['copy_kernel']['_local_id_1_c']
+        self._local_id_2_c = arguments_of_the_map['copy_kernel']['_local_id_2_c']
+        self._g_size_0_s = arguments_of_the_map['second_kernel']['_g_size_0_s']
+        self._g_size_1_s = arguments_of_the_map['second_kernel']['_g_size_1_s']
+        self._g_size_2_s = arguments_of_the_map['second_kernel']['_g_size_2_s']
+        self._local_id_0_s = arguments_of_the_map['second_kernel']['_local_id_0_s']
+        self._local_id_1_s = arguments_of_the_map['second_kernel']['_local_id_1_s']
+        self._local_id_2_s = arguments_of_the_map['second_kernel']['_local_id_2_s']
+        self._g_size_0_t = arguments_of_the_map['third_kernel']['_g_size_0_t']
+        self._g_size_1_t = arguments_of_the_map['third_kernel']['_g_size_1_t']
+        self._g_size_2_t = arguments_of_the_map['third_kernel']['_g_size_2_t']
+        self._local_id_0_t = arguments_of_the_map['third_kernel']['_local_id_0_t']
+        self._local_id_1_t = arguments_of_the_map['third_kernel']['_local_id_1_t']
+        self._local_id_2_t = arguments_of_the_map['third_kernel']['_local_id_2_t']
 
+        _grp_sz_0 = int(self._g_size_0_s/self._local_id_0_s)
+        _grp_sz_1 = int(self._g_size_1_s/self._local_id_1_s)
 
-    #FIRST KERNEL ATRIBS
-    _g_size_0 = int(_dim_ensemble)  #First Kernel
-    _g_size_1 = 1   #First Kernel
-    _g_size_2 = _common_gid_2_size   #First Kernel
-    #_g_size_2 = 100   #First Kernel
-    _dim_ang = _wpui(2048) # PHASE RASTER SIZE
-    _dim_y = _wpui(4096) # ACTION-LIKE RASTER SIZE
-    #Local problem size of the Whisker map iteration
-    _local_id_0 = 4 #First Kernel
-    _local_id_1 = 1 #First Kernel
-    _local_id_2 = 4 #First Kernel
+        self._dim_ang = arguments_of_the_map['raster_size']['_dim_ang']
+        self._dim_y = arguments_of_the_map['raster_size']['_dim_y']
 
-    #COPY KERNEL
+        self._dim_ang = _wpui(self._dim_ang)
+        self._dim_y = _wpui(self._dim_y)
+        self._max_iter = _wpui(self._max_iter)
+        self._lambda_1_range = _wpui(self._lambda_1_range)
 
-    _g_size_0_c = 128
-    _g_size_1_c = 128
-    _g_size_2_c = int(_lambda_1_range_map_out)
-    _local_id_0_c = 16 #Second Kernel
-    _local_id_1_c = 16 #Second Kernel
-    #_local_id_2 = 10
-    _local_id_2_c = 1 #Second Kernel
+        self.output_matrix = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype=_wp)
+        self.max_width_matrix = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype=_wp)
+        self.min_width_matrix = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype=_wp)
+        self.counter_array = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s), dtype=_wpui)
+        self.counter_array_x = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s), dtype=_wpui)
+        self.counter_array_collision = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s), dtype=_wpui)
+        self.counter_array_collision_x = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s),\
+                                                  dtype=_wpui)
+        self.CONSTANT_MAX_POINTS_ADDED = np.ones(self._g_size_2_s, dtype = _wp) *\
+            _wp(self._dim_ensemble) * _wp(self._max_iter)
+        self.CONSTANT_MAX_POINTS_ADDED = self.CONSTANT_MAX_POINTS_ADDED.astype(_wp)
+        self.LCE_MAP = np.zeros(( self._g_size_2,self._dim_y,self._dim_ang), dtype = _wpui)
+        self.LCE_MAP_x = np.zeros(( self._g_size_2,self._dim_y, self._dim_ang), dtype = _wpui)
+        self.mLCE = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype = _wp)
+        self.partition_tau = np.zeros((self._g_size_2_t, self._dim_ang, self._dim_ensemble), dtype = _wpui)
+        self.partition_x = np.zeros((self._g_size_2_t, self._dim_ang, self._dim_ensemble), dtype = _wpui)
+        self.counter_information_tau = np.zeros((self._dim_ang, self._g_size_2_t), dtype=_wp)
+        self.counter_information_x = np.zeros((self._dim_ang, self._g_size_2_t), dtype=_wp)
+        #WATCH OUT  !!!!!!!!
+        self.MAP_OUT = np.zeros((int(self._dim_y)*int(self._dim_ang), 3, self._lambda_1_range_map_out), dtype = _wpf)
+        self.MAP_OUT_x = np.zeros((int(self._dim_y)*int(self._dim_ang), 3, self._lambda_1_range_map_out), dtype = _wpf)
+        self.array_to_file = np.zeros((self._lambda_1_range, 27), _wp) #Creates array to save final output
+        self.array_half = np.empty_like(self._lambda_1, dtype=_wp)
+        if ~self._GWM_FLAG:
+            self.initial_conditions_omega_2 = np.zeros_like(self.initial_conditions_omega_2, dtype = _wp)
+            self.upsilon = np.zeros_like(self.upsilon, dtype=_wp)
 
-    #SECOND KERNEL ATRIBS
-    _g_size_0_s = 128
-    _g_size_1_s = 128
-    _g_size_2_s = _common_gid_2_size
-    _local_id_0_s = 16 #Second Kernel
-    _local_id_1_s = 16 #Second Kernel
-    _local_id_2_s = 1 #Second Kernel
-    _grp_sz_0 = int(_g_size_0_s/_local_id_0_s)
-    _grp_sz_1 = int(_g_size_1_s/_local_id_1_s)
-
-    #THIRD KERNEL ATRIBS
-    index_value = _dim_ensemble
-    if index_value > 256:
-        index_value = 256
-    _g_size_0_t = index_value
-    _g_size_1_t = 1
-    _g_size_2_t = _common_gid_2_size
-    #_g_size_2_t = 100
-    _local_id_0_t = index_value
-    _local_id_1_t = 1
-    _local_id_2_t = 1
-
-    #lambda chunks
-    lambda_offset = _wpui(_lambda_1_range/_g_size_2)
-    #******************************************************************************************
-
-
-
-    #CPU side objects
-    #********************************************************************************************
-    #Ensemble of initial conditions. Set to dimension 3
-    array_initial_conditions = np.array(np.random.uniform(-1,1, (_dim_ensemble, 3)), dtype=_wp) * _wp(SPREAD)
-
-    #Read model paramenters from file
-    with open('./data/aux_eta_pre_cached_10000000_eta_size_1_rand_seed_34567890_gwm_256_eta_7_2.5.dat', 'r') as file:
-        array_file_initial_conditions = np.loadtxt(file, dtype = _wp)
-
-    array_lambda_1 = array_file_initial_conditions[:,0].copy()
-    array_lambda_2 = array_file_initial_conditions[:,1].copy()
-    array_omega_2 =  array_file_initial_conditions[:,2].copy()
-    array_mu = array_file_initial_conditions[:,3].copy()
-    array_initial_conditions_eta = array_file_initial_conditions[:,4].copy()
-    array_v = array_file_initial_conditions[:,5].copy()
-    array_half = array_file_initial_conditions[:,6].copy()
+    def set_file_as_initial_conditions(self, input_file : str ):
+        with open(input_file, "r") as file_input:
+            array_input = np.loadtxt(file_input, dtype = _wp)
+        self._lambda_1 = array_input[:,0].copy()
+        self._lambda_2 = array_input[:,1].copy()
+        self.initial_conditions_omega_2 =  array_input[:,2].copy()
+        self.mu = array_input[:,3].copy()
+        self.initial_conditions_eta = array_input[:,4].copy()
+        self.upsilon = array_input[:,5].copy()
+        self.array_half = array_input[:,6].copy()
     #Copy is necesary to align the memory blocks
 
-    del array_file_initial_conditions #Redundant object
+    def create_device_buffers(self):
 
-    if ~_gwm_flag:
-        array_omega_2 = np.zeros_like(array_omega_2, dtype = _wp)
-        array_v = np.zeros_like(array_v, dtype=_wp)
+        self.OCL_Object.buffer_global(self.array_half, "half", False)
+        self.OCL_Object.buffer_global(self.initial_conditions, "initial_conditions", False)
+        self.OCL_Object.buffer_global(self.initial_conditions_eta, "initial_conditions_eta", False)
+        self.OCL_Object.buffer_global(self.initial_conditions_omega_2, "omega_2", False)
+        self.OCL_Object.buffer_global(self.upsilon, "v", False)
+        self.OCL_Object.buffer_global(self._lambda_2, "lambda_2", False)
+        self.OCL_Object.buffer_global(self._lambda_1, "lambda_1", False)
+        self.OCL_Object.buffer_global(self.output_matrix, "output_matrix")
+        self.OCL_Object.buffer_global(self.max_width_matrix, "max_width_matrix")
+        self.OCL_Object.buffer_global(self.min_width_matrix, "min_width_matrix")
+        self.OCL_Object.buffer_global(self.counter_array, "counter_array")
+        self.OCL_Object.buffer_global(self.counter_array_x, "counter_array_x")
+        self.OCL_Object.buffer_global(self.mLCE, "mLCE")
+        self.OCL_Object.buffer_global(self.LCE_MAP, "LCE_MAP")
+        self.OCL_Object.buffer_global(self.LCE_MAP_x, "LCE_MAP_x")
+        self.OCL_Object.buffer_global(self.MAP_OUT, "MAP_OUT")
+        self.OCL_Object.buffer_global(self.MAP_OUT_x, "MAP_OUT_x")
+        self.OCL_Object.buffer_global(self.partition_tau, "partition_tau")
+        self.OCL_Object.buffer_global(self.partition_x, "partition_x")
+        self.OCL_Object.buffer_global(self.counter_information_tau, "counter_information_tau")
+        self.OCL_Object.buffer_global(self.counter_information_x, "counter_information_x")
+        self.OCL_Object.buffer_global(self.counter_array_collision, "counter_array_collision")
+        self.OCL_Object.buffer_global(self.counter_array_collision_x, "counter_array_collision_x")
+        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter")
+        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter_x")
+        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter_collision_tau")
+        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter_collision_x")
+        self.OCL_Object.buffer_local(self._local_id_0_s, 4, "counter_partition_tau")
+        self.OCL_Object.buffer_local(self._local_id_0_s, 4, "counter_partition_x")
 
-
-    array_to_file = np.zeros((_lambda_1_range, 27), _wp) #Creates array to save final output
-    if array_lambda_1.shape[0] != _lambda_1_range:
-        print(f"Range of lambda: {_lambda_1_range} not equal to model parameters list size: {array_lambda_1.shape[0]}.")
-        exit(-1)
-
-    output_matrix = np.zeros((_lambda_1_range, _dim_ensemble), dtype=_wp)
-    max_width_matrix = np.zeros((_lambda_1_range, _dim_ensemble), dtype=_wp)
-    min_width_matrix = np.zeros((_lambda_1_range, _dim_ensemble), dtype=_wp)
-    counter_array = np.zeros((_grp_sz_0*_grp_sz_1, _g_size_2_s), dtype=_wpui)
-    counter_array_x = np.zeros((_grp_sz_0*_grp_sz_1, _g_size_2_s), dtype=_wpui)
-    counter_array_collision = np.zeros((_grp_sz_0*_grp_sz_1, _g_size_2_s), dtype=_wpui)
-    counter_array_collision_x = np.zeros((_grp_sz_0*_grp_sz_1, _g_size_2_s), dtype=_wpui)
-    CONSTANT_MAX_POINTS_ADDED = np.ones(_g_size_2_s, dtype = _wp) * _wp(_dim_ensemble) * _wp(_max_iter)
-    CONSTANT_MAX_POINTS_ADDED = CONSTANT_MAX_POINTS_ADDED.astype(_wp)
-    LCE_MAP = np.zeros(( _g_size_2,_dim_y,_dim_ang), dtype = _wpui)
-    LCE_MAP_x = np.zeros(( _g_size_2,_dim_y,_dim_ang), dtype = _wpui)
-    mLCE = np.zeros((_lambda_1_range, _dim_ensemble), dtype = _wp)
-    partition_tau = np.zeros((_g_size_2_t, _dim_ang, _dim_ensemble), dtype = _wpui)
-    partition_x = np.zeros((_g_size_2_t, _dim_ang, _dim_ensemble), dtype = _wpui)
-    counter_information_tau = np.zeros((_dim_ang, _g_size_2_t), dtype=_wp)
-    counter_information_x = np.zeros((_dim_ang, _g_size_2_t), dtype=_wp)
-    #WATCH OUT  !!!!!!!!
-    MAP_OUT = np.zeros((int(_dim_y)*int(_dim_ang), 3, _lambda_1_range_map_out), dtype = _wpf)
-    MAP_OUT_x = np.zeros((int(_dim_y)*int(_dim_ang), 3, _lambda_1_range_map_out), dtype = _wpf)
-    #**************************************************************************************************
-
-    OCL_Object = OpenCL_Object() #OpenCL object handles host -> device -> host operations
-
-    #Buffer CPU -> GPU
-    #Sets pointer to global and local memory in GPU
-    OCL_Object.buffer_global(array_half, "half", False)
-    OCL_Object.buffer_global(array_initial_conditions, "initial_conditions", False)
-    OCL_Object.buffer_global(array_initial_conditions_eta, "initial_conditions_eta", False)
-    OCL_Object.buffer_global(array_omega_2, "omega_2", False)
-    OCL_Object.buffer_global(array_v, "v", False)
-    OCL_Object.buffer_global(array_lambda_2, "lambda_2", False)
-    OCL_Object.buffer_global(array_lambda_1, "lambda_1", False)
-    OCL_Object.buffer_global(output_matrix, "output_matrix")
-    OCL_Object.buffer_global(max_width_matrix, "max_width_matrix")
-    OCL_Object.buffer_global(min_width_matrix, "min_width_matrix")
-    OCL_Object.buffer_global(counter_array, "counter_array")
-    OCL_Object.buffer_global(counter_array_x, "counter_array_x")
-    OCL_Object.buffer_global(mLCE, "mLCE")
-    OCL_Object.buffer_global(LCE_MAP, "LCE_MAP")
-    OCL_Object.buffer_global(LCE_MAP_x, "LCE_MAP_x")
-    OCL_Object.buffer_global(MAP_OUT, "MAP_OUT")
-    OCL_Object.buffer_global(MAP_OUT_x, "MAP_OUT_x")
-    OCL_Object.buffer_global(partition_tau, "partition_tau")
-    OCL_Object.buffer_global(partition_x, "partition_x")
-    OCL_Object.buffer_global(counter_information_tau, "counter_information_tau")
-    OCL_Object.buffer_global(counter_information_x, "counter_information_x")
-    OCL_Object.buffer_global(counter_array_collision, "counter_array_collision")
-    OCL_Object.buffer_global(counter_array_collision_x, "counter_array_collision_x")
-    OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter")
-    OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter_x")
-    OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter_collision_tau")
-    OCL_Object.buffer_local(_local_id_0_s*_local_id_1_s, 4, "counter_collision_x")
-    OCL_Object.buffer_local(_local_id_0_s, 4, "counter_partition_tau")
-    OCL_Object.buffer_local(_local_id_0_s, 4, "counter_partition_x")
-    #*******************************************************************************************
-
-    #To unroll loops explicit declartion of maximum iteration step
-    with open('one_kernel_form.cl', 'r') as file_to_change:
-        script = file_to_change.read()
-        script = script.replace("#define MAXITER", f"#define MAXITER {_max_iter}")
-    with open('one_kernel.cl', 'w') as file:
-        file.write(script)
-    #Uses a form to create the final script file
-    #Appends to the end of the script file necesary functions
-    OCL_Object.program(['one_kernel.cl', 'src/jacobian.cl', 'src/modulus.cl'], ['-I ./includes'])
-
-    print("Mem. Buffer OK")
-
-    total_time = 0.
-
-    for index_offset in np.arange(lambda_offset):
-        start_time = time.time()
-        print(f"Start time: {time.strftime('%H:%M:%S')}")
-
-        lambda_offset_it = _wpui(index_offset*_g_size_2) #Iteration offset per chunk
-
-        #Evolution of the system. Half-width, mLCE, Rasterization
-        ev1 = OCL_Object.kernel.gen_whisker_map(OCL_Object.queue,
-                                            (_g_size_0, _g_size_1, _g_size_2),
-                                            (_local_id_0, _local_id_1, _local_id_2),
-                                            OCL_Object.initial_conditions_device,
-                                            OCL_Object.output_matrix_device,
-                                            OCL_Object.max_width_matrix_device,
-                                            OCL_Object.min_width_matrix_device,
-                                            OCL_Object.lambda_1_device,
-                                            OCL_Object.lambda_2_device, OCL_Object.v_device,
-                                            OCL_Object.initial_conditions_eta_device,
-                                            OCL_Object.omega_2_device, _max_iter, _dim_ang,
-                                            _dim_y, _lambda_1_range,
-                                            OCL_Object.half_device,
-                                            OCL_Object.mLCE_device,
-                                            OCL_Object.LCE_MAP_device,
-                                            OCL_Object.LCE_MAP_x_device,
-                                            lambda_offset_it,
-                                            OCL_Object.partition_tau_device,
-                                            OCL_Object.partition_x_device,
-                                            _gwm_flag
+    def kernel_execution_gen_whisker_map(self, lambda_offset_it, wait = None) -> cl.Event:
+        ev1 = self.OCL_Object.kernel.gen_whisker_map(self.OCL_Object.queue,
+                                            (self._g_size_0, self._g_size_1, self._g_size_2),
+                                            (self._local_id_0, self._local_id_1, self._local_id_2),
+                                            self.OCL_Object.initial_conditions_device,
+                                            self.OCL_Object.output_matrix_device,
+                                            self.OCL_Object.max_width_matrix_device,
+                                            self.OCL_Object.min_width_matrix_device,
+                                            self.OCL_Object.lambda_1_device,
+                                            self.OCL_Object.lambda_2_device, self.OCL_Object.v_device,
+                                            self.OCL_Object.initial_conditions_eta_device,
+                                            self.OCL_Object.omega_2_device, self._max_iter, self._dim_ang,
+                                            self._dim_y, self._lambda_1_range,
+                                            self.OCL_Object.half_device,
+                                            self.OCL_Object.mLCE_device,
+                                            self.OCL_Object.LCE_MAP_device,
+                                            self.OCL_Object.LCE_MAP_x_device,
+                                            _wpui(lambda_offset_it),
+                                            self.OCL_Object.partition_tau_device,
+                                            self.OCL_Object.partition_x_device,
+                                            self._GWM_FLAG,
+                                            wait_for = None
                                             )
-        #Wait for the evolution of the whisker map
-        cl.wait_for_events([ev1])
-        print("First Kernel Finished")
-        #This kernel transform the rasterization back to vector, but in float32 (less mem usage)
-        ev_copy_map = OCL_Object.kernel.from_matrix_to_array(OCL_Object.queue,
-                                                             (_g_size_0_c, _g_size_1_c, _g_size_2_c),
+        return ev1
+
+
+
+    def kernel_execution_reduction(self, lambda_offset_it, wait = None) -> cl.Event:
+        ev2 = self.OCL_Object.kernel.reduction(self.OCL_Object.queue,
+                                           (self._g_size_0_s, self._g_size_1_s, self._g_size_2_s),
+                                           (self._local_id_0_s, self._local_id_1_s, self._local_id_2_s),
+                                           self.OCL_Object.LCE_MAP_device,
+                                           self.OCL_Object.LCE_MAP_x_device,
+                                           self.OCL_Object.counter_array_device,
+                                           self.OCL_Object.counter_device,
+                                           self.OCL_Object.counter_array_x_device,
+                                           self.OCL_Object.counter_x_device,
+                                           self._dim_ang,
+                                           self._dim_y,
+                                           _wpl(self._max_iter)*_wpl(self._dim_ensemble),
+                                           self.OCL_Object.half_device,
+                                           _wpui(lambda_offset_it),
+                                          self.OCL_Object.counter_collision_tau_device,
+                                          self.OCL_Object.counter_collision_x_device,
+                                          self.OCL_Object.counter_array_collision_device,
+                                          self.OCL_Object.counter_array_collision_x_device,
+                                           wait_for=wait)
+        return ev2
+
+    def kernel_execution_form_matrix_to_array(self, index_offset, wait = None) -> cl.Event:
+        ev_copy_map = self.OCL_Object.kernel.from_matrix_to_array(self.OCL_Object.queue,
+                                                             (self._g_size_0_c, self._g_size_1_c, self._g_size_2_c),
     #                                                         None,
-                                                             (_local_id_0_c, _local_id_1_c, _local_id_2_c),
-                                                               OCL_Object.LCE_MAP_device,
-                                                               OCL_Object.LCE_MAP_x_device,
-                                                               OCL_Object.MAP_OUT_device,
-                                                               OCL_Object.MAP_OUT_x_device,
-                                                                _dim_ang, _dim_y,
-                                                             OCL_Object.half_device,
-                                                             OCL_Object.lambda_1_device,
-                                                             _wpui(_g_size_2/_lambda_1_range_map_out),
-                                                             _wpui(_g_size_2),
+                                                             (self._local_id_0_c, self._local_id_1_c, self._local_id_2_c),
+                                                               self.OCL_Object.LCE_MAP_device,
+                                                               self.OCL_Object.LCE_MAP_x_device,
+                                                               self.OCL_Object.MAP_OUT_device,
+                                                               self.OCL_Object.MAP_OUT_x_device,
+                                                                self._dim_ang, self._dim_y,
+                                                             self.OCL_Object.half_device,
+                                                             self.OCL_Object.lambda_1_device,
+                                                             _wpui(self._g_size_2/self._lambda_1_range_map_out),
+                                                             _wpui(self._g_size_2),
                                                              _wpui(index_offset),
-                                                                wait_for=[ev1])
-        cl.wait_for_events([ev_copy_map])
-        #Sum of the rastered cells. Creates collision difference and porosity.
-        ev2 = OCL_Object.kernel.reduction(OCL_Object.queue,
-                                           (_g_size_0_s,_g_size_1_s,_g_size_2_s),
-                                           (_local_id_0_s,_local_id_1_s,_local_id_2_s),
-                                           OCL_Object.LCE_MAP_device,
-                                           OCL_Object.LCE_MAP_x_device,
-                                           OCL_Object.counter_array_device,
-                                           OCL_Object.counter_device,
-                                           OCL_Object.counter_array_x_device,
-                                           OCL_Object.counter_x_device,
-                                           _dim_ang,
-                                           _dim_y,
-                                           _wpl(_max_iter)*_wpl(_dim_ensemble),
-                                           OCL_Object.half_device,
-                                           lambda_offset_it,
-                                          OCL_Object.counter_collision_tau_device,
-                                          OCL_Object.counter_collision_x_device,
-                                          OCL_Object.counter_array_collision_device,
-                                          OCL_Object.counter_array_collision_x_device,
-                                           wait_for=[ev_copy_map])
-        cl.wait_for_events([ev2])
-        print("Porosity count")
-        #Sum over the partitions of the Shannon entropy from element to ensemble.
-        ev_shannon = OCL_Object.kernel.Shannon_entropy(OCL_Object.queue,
-                                                       (_g_size_0_t, _g_size_1_t, _g_size_2_t),
-                                                       (_local_id_0_t, _local_id_1_t, _local_id_2_t),
-                                                       OCL_Object.partition_tau_device,
-                                                       OCL_Object.partition_x_device,
-                                                       OCL_Object.counter_partition_tau_device,
-                                                       OCL_Object.counter_partition_x_device,
-                                                       OCL_Object.counter_information_tau_device,
-                                                       OCL_Object.counter_information_x_device,
-                                                       _wpui(_dim_ang),
-                                                       _wpui(_dim_ensemble))
+                                                                wait_for=wait)
+        return ev_copy_map
 
 
-        cl.wait_for_events([ev_shannon])
-        print("Count * log (count) Shannon_entropy (Sum argument)")
-        #Copy every value out from the GPU
-        ev_copy_6 = cl.enqueue_copy(OCL_Object.queue, counter_array, OCL_Object.counter_array_device)
-        ev_copy_8 = cl.enqueue_copy(OCL_Object.queue, counter_array_x, OCL_Object.counter_array_x_device)
-        ev_inform_tau = cl.enqueue_copy(OCL_Object.queue, counter_information_tau, OCL_Object.counter_information_tau_device)
-        ev_inform_x = cl.enqueue_copy(OCL_Object.queue, counter_information_x, OCL_Object.counter_information_x_device)
-        ev_collision_tau = cl.enqueue_copy(OCL_Object.queue, counter_array_collision, OCL_Object.counter_array_collision_device)
-        ev_collision_x = cl.enqueue_copy(OCL_Object.queue, counter_array_collision_x, OCL_Object.counter_array_collision_x_device)
-        cl.wait_for_events([ ev_copy_6, ev_copy_8, ev_inform_tau, ev_inform_x, ev_collision_tau, ev_collision_x ])
+    def kernel_execution_Shannon_entropy(self, wait = None) -> cl.Event:
+
+        ev_shannon = self.OCL_Object.kernel.Shannon_entropy(self.OCL_Object.queue,
+                                                       (self._g_size_0_t, self._g_size_1_t, self._g_size_2_t),
+                                                       (self._local_id_0_t, self._local_id_1_t, self._local_id_2_t),
+                                                       self.OCL_Object.partition_tau_device,
+                                                       self.OCL_Object.partition_x_device,
+                                                       self.OCL_Object.counter_partition_tau_device,
+                                                       self.OCL_Object.counter_partition_x_device,
+                                                       self.OCL_Object.counter_information_tau_device,
+                                                       self.OCL_Object.counter_information_x_device,
+                                                       _wpui(self._dim_ang),
+                                                       _wpui(self._dim_ensemble),
+                                                        wait_for = wait)
+
+        return ev_shannon
 
 
+    def update_execution_events(self):
+        total_time = 0.
+        lambda_offset = _wpui(self._lambda_1_range/self._g_size_2)
 
-        #INFORMATION OF THE SHANNON ENTROPY******************************************************
-        info_tau = information_shannon_entropy(_dim_ang, _dim_ensemble, _max_iter, counter_information_tau)
-        info_x = information_shannon_entropy(_dim_ang, _dim_ensemble, _max_iter, counter_information_x)
-        #*******************************************************************************************
-        #Count of cells occupied********************************************************************
-        count = np.sum(counter_array, axis=0)
-        count_x = np.sum(counter_array_x, axis=0)
+        for index_offset in np.arange(lambda_offset):
+            start_time = time.time()
+            print(f"Start time: {time.strftime('%H:%M:%S')}")
+            lambda_offset_it = _wpui(index_offset*self._g_size_2) #Iteration offset per chunk
 
-        col_step = np.sum(counter_array_collision, axis = 0).astype(_wp) - CONSTANT_MAX_POINTS_ADDED
-        col_step_x = np.sum(counter_array_collision_x, axis = 0).astype(_wp) - CONSTANT_MAX_POINTS_ADDED
+            ev1 = self.kernel_execution_gen_whisker_map(lambda_offset_it)
+            #Wait for the evolution of the whisker map
+            cl.wait_for_events([ev1])
+            print("First Kernel Finished")
+            ev_copy_map = self.kernel_execution_form_matrix_to_array(index_offset, [ev1])
+            cl.wait_for_events([ev_copy_map])
+            ev2 = self.kernel_execution_reduction(lambda_offset_it,[ev_copy_map])
+            cl.wait_for_events([ev2])
+            ev_shannon = self.kernel_execution_Shannon_entropy([ev2])
 
-        #*******************************************************************************************
-        # ACOMODATES ON VECTOR FOR HDD COPY AT THE END OF THE PROGRAM
+            cl.wait_for_events([ev_shannon])
+            print("Count * log (count) Shannon_entropy (Sum argument)")
+            #Copy every value out from the GPU
+            ev_copy_6 = cl.enqueue_copy(self.OCL_Object.queue, self.counter_array,\
+                                        self.OCL_Object.counter_array_device)
+            ev_copy_8 = cl.enqueue_copy(self.OCL_Object.queue, self.counter_array_x,\
+                                        self.OCL_Object.counter_array_x_device)
+            ev_inform_tau = cl.enqueue_copy(self.OCL_Object.queue,\
+                                            self.counter_information_tau,\
+                                            self.OCL_Object.counter_information_tau_device)
+            ev_inform_x = cl.enqueue_copy(self.OCL_Object.queue,\
+                                          self.counter_information_x,\
+                                          self.OCL_Object.counter_information_x_device)
+            ev_collision_tau = cl.enqueue_copy(self.OCL_Object.queue,\
+                                               self.counter_array_collision,\
+                                               self.OCL_Object.counter_array_collision_device)
+            ev_collision_x = cl.enqueue_copy(self.OCL_Object.queue,\
+                                             self.counter_array_collision_x,\
+                                             self.OCL_Object.counter_array_collision_x_device)
+            cl.wait_for_events([ ev_copy_6, ev_copy_8, ev_inform_tau,\
+                                ev_inform_x, ev_collision_tau, ev_collision_x ])
+            #INFORMATION OF THE SHANNON ENTROPY******************************************************
+            info_tau = information_shannon_entropy(self._dim_ang, self._dim_ensemble,\
+                                                   self._max_iter, self.counter_information_tau)
+            info_x = information_shannon_entropy(self._dim_ang, self._dim_ensemble,\
+                                                 self._max_iter, self.counter_information_x)
+            #*******************************************************************************************
+            #Count of cells occupied********************************************************************
+            count = np.sum(self.counter_array, axis=0)
+            count_x = np.sum(self.counter_array_x, axis=0)
 
-        low_index = index_offset*_g_size_2_s
-        high_index = low_index + _g_size_2_s
-        info_tau_re_shape = np.reshape(info_tau,(_g_size_2_t,1))
-        info_x_re_shape = np.reshape(info_x,(_g_size_2_t,1))
-        c_re_shape = np.reshape(count, (_g_size_2_s, 1))
-        c_x_re_shape = np.reshape(count_x, (_g_size_2_s, 1))
-        lambda_1_re_shape = np.reshape(array_lambda_1[low_index : high_index ], (_g_size_2_s, 1))
-        lambda_2_re_shape = np.reshape(array_lambda_2[low_index : high_index], (_g_size_2_s, 1))
-        v_re_shape = np.reshape(array_v[low_index : high_index], (_g_size_2_s, 1))
-        mu_re_shape = np.reshape(array_mu[low_index : high_index], (_g_size_2_s, 1))
-        eta_re_shape = np.reshape(array_initial_conditions_eta[low_index : high_index], (_g_size_2_s, 1))
-        v_stack = np.column_stack((lambda_1_re_shape,
-                                   lambda_2_re_shape,
-                                   v_re_shape,
-                                   mu_re_shape,
-                                   c_re_shape,
-                                   c_x_re_shape,
-                                   eta_re_shape,
-                                   info_tau_re_shape,
-                                   info_x_re_shape))
+            col_step = np.sum(self.counter_array_collision, axis = 0).astype(_wp) - self.CONSTANT_MAX_POINTS_ADDED
+            col_step_x = np.sum(self.counter_array_collision_x, axis = 0).astype(_wp) - self.CONSTANT_MAX_POINTS_ADDED
 
-        array_to_file[low_index: high_index ,:9] = v_stack #Set the results in the array output
-        #*********************************************************************************************
-        end_time = (time.time() - start_time)/3600 # Time estimate
-        total_time = total_time + end_time # Total time per chunk
+            #*******************************************************************************************
+            # ACOMODATES ON VECTOR FOR HDD COPY AT THE END OF THE PROGRAM
+
+            low_index = index_offset*self._g_size_2_s
+            high_index = low_index + self._g_size_2_s
+            info_tau_re_shape = np.reshape(info_tau,(self._g_size_2_t,1))
+            info_x_re_shape = np.reshape(info_x,(self._g_size_2_t,1))
+            c_re_shape = np.reshape(count, (self._g_size_2_s, 1))
+            c_x_re_shape = np.reshape(count_x, (self._g_size_2_s, 1))
+            lambda_1_re_shape = np.reshape(self._lambda_1[low_index : high_index ], (self._g_size_2_s, 1))
+            lambda_2_re_shape = np.reshape(self._lambda_2[low_index : high_index], (self._g_size_2_s, 1))
+            v_re_shape = np.reshape(self.upsilon[low_index : high_index], (self._g_size_2_s, 1))
+            mu_re_shape = np.reshape(self.mu[low_index : high_index], (self._g_size_2_s, 1))
+            eta_re_shape = np.reshape(self.initial_conditions_eta[low_index : high_index], (self._g_size_2_s, 1))
+            v_stack = np.column_stack((lambda_1_re_shape,
+                                       lambda_2_re_shape,
+                                       v_re_shape,
+                                       mu_re_shape,
+                                       c_re_shape,
+                                       c_x_re_shape,
+                                       eta_re_shape,
+                                       info_tau_re_shape,
+                                       info_x_re_shape))
+
+            self.array_to_file[low_index: high_index ,:9] = v_stack #Set the results in the array output
+            #*********************************************************************************************
+            end_time = (time.time() - start_time)/3600 # Time estimate
+            total_time = total_time + end_time # Total time per chunk
+
+
+            if self._save_maps:
+                ev_copy_MAP = cl.enqueue_copy(self.OCL_Object.queue, self.MAP_OUT , self.OCL_Object.MAP_OUT_device)
+                ev_copy_MAP_x = cl.enqueue_copy(self.OCL_Object.queue,\
+                                                self.MAP_OUT_x ,self.OCL_Object.MAP_OUT_x_device)
+                cl.wait_for_events([ev_copy_MAP, ev_copy_MAP_x])
+
         print(f"Total time: {end_time}")
+        ev_copy_4 = cl.enqueue_copy(self.OCL_Object.queue, self.mLCE, self.OCL_Object.mLCE_device)
+        ev_copy_5 = cl.enqueue_copy(self.OCL_Object.queue, self.max_width_matrix , self.OCL_Object.max_width_matrix_device)
+        ev_copy_6 = cl.enqueue_copy(self.OCL_Object.queue, self.min_width_matrix , self.OCL_Object.min_width_matrix_device)
+        ev_copy_7 = cl.enqueue_copy(self.OCL_Object.queue, self.output_matrix , self.OCL_Object.output_matrix_device)
+        print("TOTAL_TIME: ", total_time)
 
-        if _save_maps:
-            ev_copy_MAP = cl.enqueue_copy(OCL_Object.queue, MAP_OUT , OCL_Object.MAP_OUT_device)
-            ev_copy_MAP_x = cl.enqueue_copy(OCL_Object.queue, MAP_OUT_x , OCL_Object.MAP_OUT_x_device)
-            cl.wait_for_events([ev_copy_MAP, ev_copy_MAP_x])
-            for name in range(_lambda_1_range_map_out):
+        cl.wait_for_events([ev_copy_4, ev_copy_5, ev_copy_6, ev_copy_7])
+    """
+    def save_auxilliary_data_map(self, index_offset : int, save_flag : bool = False) -> None:
+        if save_flag:
+            for name in np.arange(self._lambda_1_range_map_out):
                 file_map = f"{directory}/map_\
-                    {array_lambda_1[index_offset*_g_size_2 + name*int(_g_size_2/_lambda_1_range_map_out)]}_{suffix}.map"
+                    {self._lambda_1[index_offset*self._g_size_2 + name*int(self._g_size_2/self._lambda_1_range_map_out)]}_{suffix}.map"
                 file_map_x = f"{directory}/map_x_\
-                    {array_lambda_1[index_offset*_g_size_2+ name*int(_g_size_2/_lambda_1_range_map_out)]}_{suffix}.map"
+                    {self._lambda_1[index_offset*self._g_size_2+ name*int(self._g_size_2/sefl._lambda_1_range_map_out)]}_{suffix}.map"
 
                 with open(file_map, "w") as file, open(file_map_x, "w") as file_x:
                     np.savetxt(file, MAP_OUT[:,:,name])
                     np.savetxt(file_x, MAP_OUT_x[:,:,name])
 
-        if _save_collisions:
+        if self._save_collisions:
             file_collision = f"{directory}/collision_{array_lambda_1[index_offset*_g_size_2]}_{suffix}.dat"
             file_collision_x = f"{directory}/collision_x_{array_lambda_1[index_offset*_g_size_2]}_{suffix}.dat"
             with open(file_collision, "w") as file_col, open(file_collision_x, "w") as file_col_x:
                 np.savetxt(file_col, col_step)
                 np.savetxt(file_col_x, col_step_x)
+    """
+    def digest_statistics(self,file_name, _axis = 1, verbose = False) -> np.array:
+        #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
+        mlce =2.*np.fabs(np.mean(self.mLCE, axis=1) - 2.)/_wp(self._max_iter)
 
-    ev_copy_4 = cl.enqueue_copy(OCL_Object.queue, mLCE, OCL_Object.mLCE_device)
-    ev_copy_5 = cl.enqueue_copy(OCL_Object.queue, max_width_matrix , OCL_Object.max_width_matrix_device)
-    ev_copy_6 = cl.enqueue_copy(OCL_Object.queue, min_width_matrix , OCL_Object.min_width_matrix_device)
-    ev_copy_7 = cl.enqueue_copy(OCL_Object.queue, output_matrix , OCL_Object.output_matrix_device)
+        #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
+        mLCE_M = 2.*np.fabs(np.sum(self.mLCE, axis = _axis)/\
+                            _wp(self._dim_ensemble) - 2.)/_wp(self._max_iter)
 
-    print("TOTAL_TIME: ", total_time)
+        #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
+        mLCE_mean = 2.*np.fabs(np.mean(self.mLCE,axis= _axis)- 2.)\
+            /_wp(self._max_iter)
 
-    cl.wait_for_events([ev_copy_4, ev_copy_5, ev_copy_6, ev_copy_7])
+        #Minimum action-like variable value per layer shape: (_lambda_1_range,)
+        min_width = np.min(self.min_width_matrix, axis= _axis)
+        #Maximum action-like variable value per layer shape: (_lambda_1_range,)
+        max_width = np.max(self.max_width_matrix, axis= _axis)
 
-    #Free GPU global memory pointers*********************************************************
-    OCL_Object.free_buffer("half_device")
-    OCL_Object.free_buffer("initial_conditions_device")
-    OCL_Object.free_buffer("initial_conditions_eta_device")
-    OCL_Object.free_buffer("omega_2_device")
-    OCL_Object.free_buffer("v_device")
-    OCL_Object.free_buffer("lambda_2_device")
-    OCL_Object.free_buffer("lambda_1_device")
-    OCL_Object.free_buffer("output_matrix_device")
-    OCL_Object.free_buffer("max_width_matrix_device")
-    OCL_Object.free_buffer("min_width_matrix_device")
-    OCL_Object.free_buffer("counter_array_x_device")
-    OCL_Object.free_buffer("counter_array_device")
-    OCL_Object.free_buffer("mLCE_device")
-    OCL_Object.free_buffer("LCE_MAP_x_device")
-    OCL_Object.free_buffer("LCE_MAP_device")
-    OCL_Object.free_buffer("MAP_OUT_x_device")
-    OCL_Object.free_buffer("MAP_OUT_device")
-    OCL_Object.free_buffer("partition_tau_device")
-    OCL_Object.free_buffer("partition_x_device")
-    OCL_Object.free_buffer("counter_information_tau_device")
-    OCL_Object.free_buffer("counter_information_x_device")
-    OCL_Object.free_buffer("counter_array_collision_device")
-    OCL_Object.free_buffer("counter_array_collision_x_device")
-    #*****************************************************************************************
+        #2* y_{\\mathrm{hw}} shape: (_lambda_1_range)
+        half_width_vector = max_width - min_width
 
-    #*****************************************************************************************
-    #Statistics calculations
-    #*****************************************************************************************
-    _axis = 1
-    #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
-    mlce =2.*np.fabs(np.mean(mLCE, axis=1) - 2.)/_wp(_max_iter)
+        #2* y_{\\mathrm{b}} shape: (_lambda_1_range, _dim_ensemble)
+        full_width_vector = self.max_width_matrix - self.min_width_matrix
 
-    #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
-    mLCE_M = 2.*np.fabs(np.sum(mLCE, axis = _axis)/_wp(_dim_ensemble) - 2.)/_wp(_max_iter)
-
-    #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
-    mLCE_mean = 2.*np.fabs(np.mean(mLCE,axis= _axis)- 2.)/_wp(_max_iter)
-
-    #Minimum action-like variable value per layer shape: (_lambda_1_range,)
-    min_width = np.min(min_width_matrix, axis= _axis)
-    #Maximum action-like variable value per layer shape: (_lambda_1_range,)
-    max_width = np.max(max_width_matrix, axis= _axis)
-
-    #2* y_{\\mathrm{hw}} shape: (_lambda_1_range)
-    half_width_vector = max_width - min_width
-
-    #2* y_{\\mathrm{b}} shape: (_lambda_1_range, _dim_ensemble)
-    full_width_vector = max_width_matrix - min_width_matrix
-
-    #L * y_{\\mathrm{b}} shape: (_lambda_1_range, _dim_ensemble)
-    metric_entropy_vector = output_matrix * full_width_vector / 2.
+        #L * y_{\\mathrm{b}} shape: (_lambda_1_range, _dim_ensemble)
+        metric_entropy_vector = self.output_matrix * full_width_vector / 2.
 
 
-    #y_{\\mathrm{hw}} shape: (_lambda_1_range)
-    half__ = half_width_vector/2.
-    mlce_max = np.max(mLCE, axis = _axis)
-    min_tan_map_L = np.min(output_matrix, axis = _axis )
-    max_tan_map_L = np.max(output_matrix, axis = _axis )
-    std_tan_map_L = np.std(output_matrix, axis = _axis )
-    std_width = np.std(full_width_vector, axis = _axis )
-    h_metric_mean = np.mean(metric_entropy_vector, axis = _axis)*array_lambda_1
-    h_metric_std = np.std(metric_entropy_vector, axis = _axis)*array_lambda_1
-    min_widht_orbit = np.min(full_width_vector, axis = _axis)
-    #Half-witdh of the max of mLCE (Tangent Map)
-    mask_output_matrix = np.apply_along_axis(mask_gather, 0, output_matrix, (max_tan_map_L,))
-    mask_output_matrix = mask_output_matrix[0]
+        #y_{\\mathrm{hw}} shape: (_lambda_1_range)
+        half__ = half_width_vector/2.
+        mlce_max = np.max(self.mLCE, axis = _axis)
+        min_tan_map_L = np.min(self.output_matrix, axis = _axis )
+        max_tan_map_L = np.max(self.output_matrix, axis = _axis )
+        std_tan_map_L = np.std(self.output_matrix, axis = _axis )
+        std_width = np.std(full_width_vector, axis = _axis )
+        h_metric_mean = np.mean(metric_entropy_vector, axis = _axis)*self._lambda_1
+        h_metric_std = np.std(metric_entropy_vector, axis = _axis)*self._lambda_1
+        min_widht_orbit = np.min(full_width_vector, axis = _axis)
+        #Half-witdh of the max of mLCE (Tangent Map)
+        mask_output_matrix = np.apply_along_axis(mask_gather, 0, self.output_matrix, (max_tan_map_L,))
+        mask_output_matrix = mask_output_matrix[0]
+        y_max_tangent_map = full_width_vector[mask_output_matrix] / 2.
 
-    y_max_tangent_map = full_width_vector[mask_output_matrix] / 2.
+        self.array_to_file[:, 9:] = np.column_stack([
+                                          np.mean(self.output_matrix, axis=_axis),
+                                          mlce_max,
+                                          mLCE_M,
+                                          mLCE_mean,
+                                          mlce,
+                                          h_metric_mean,
+                                          h_metric_std,
+                                          half_width_vector/2,
+                                          half__,
+                                          min_tan_map_L,
+                                          max_tan_map_L,
+                                          std_tan_map_L,
+                                          np.mean(full_width_vector/2, axis=_axis),
+                                          min_width/2.,
+                                          max_width/2.,
+                                          std_width,
+                                          min_widht_orbit,
+                                          y_max_tangent_map
+                                          ])
 
+        save_output_to_file(self.array_to_file, file_name)
+    def free_all_global_buffers(self):
 
-
-    array_to_file[:, 9:] = np.column_stack([
-                                      np.mean(output_matrix, axis=_axis),
-                                      mlce_max,
-                                      mLCE_M,
-                                      mLCE_mean,
-                                      mlce,
-                                      h_metric_mean,
-                                      h_metric_std,
-                                      half_width_vector/2,
-                                      half__,
-                                      min_tan_map_L,
-                                      max_tan_map_L,
-                                      std_tan_map_L,
-                                      np.mean(full_width_vector/2, axis=_axis),
-                                      min_width/2.,
-                                      max_width/2.,
-                                      std_width,
-                                      min_widht_orbit,
-                                      y_max_tangent_map
-                                      ])
-
-    file_name = f"{directory}/data_{suffix}.dat"
-    save_output_to_file(array_to_file, file_name)
+        self.OCL_Object.free_buffer("half_device")
+        self.OCL_Object.free_buffer("initial_conditions_device")
+        self.OCL_Object.free_buffer("initial_conditions_eta_device")
+        self.OCL_Object.free_buffer("omega_2_device")
+        self.OCL_Object.free_buffer("v_device")
+        self.OCL_Object.free_buffer("lambda_2_device")
+        self.OCL_Object.free_buffer("lambda_1_device")
+        self.OCL_Object.free_buffer("output_matrix_device")
+        self.OCL_Object.free_buffer("max_width_matrix_device")
+        self.OCL_Object.free_buffer("min_width_matrix_device")
+        self.OCL_Object.free_buffer("counter_array_x_device")
+        self.OCL_Object.free_buffer("counter_array_device")
+        self.OCL_Object.free_buffer("mLCE_device")
+        self.OCL_Object.free_buffer("LCE_MAP_x_device")
+        self.OCL_Object.free_buffer("LCE_MAP_device")
+        self.OCL_Object.free_buffer("MAP_OUT_x_device")
+        self.OCL_Object.free_buffer("MAP_OUT_device")
+        self.OCL_Object.free_buffer("partition_tau_device")
+        self.OCL_Object.free_buffer("partition_x_device")
+        self.OCL_Object.free_buffer("counter_information_tau_device")
+        self.OCL_Object.free_buffer("counter_information_x_device")
+        self.OCL_Object.free_buffer("counter_array_collision_device")
+        self.OCL_Object.free_buffer("counter_array_collision_x_device")
 
 if __name__ == '__main__':
-    main()
+    _dim_ensemble = 256
+    _common_gid_2_size = 128
+    _lambda_1_range_map_out = 1
+    index_value = _dim_ensemble
+    if index_value > 256: index_value = 256
+
+    map_aguments = {'iteration_time' : 10**4,
+                    'initial_condition_size' : _dim_ensemble,
+                    'free_parameter_size' : 1,
+                    'omega_2_size' : 1,
+                    'lambda_1_size' : 1536,
+                    'lambda_1_ini' : _wp(5.0),
+                    'lambda_1_step' : _wp(0.01),
+                    'spread_from_center' : _wp(1.e-7),
+                    'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
+                    'gen_whisker_map' : True,
+                    'explicit_eta' : None,
+                    'pre_catched_eta' : True,
+                    'raster_size' : {'_dim_ang' : 512,
+                                     '_dim_y' : 512},
+                    'map_out_lambda_range' : _lambda_1_range_map_out,
+                    'save_collisions' : False,
+                    'save_maps' : False,
+                    'first_kernel' : {'name' : None,
+                                      '_g_size_0' : int(_dim_ensemble),
+                                      '_g_size_1' : 1,
+                                      '_g_size_2' : _common_gid_2_size,
+                                      '_local_id_0' : 4,
+                                      '_local_id_1' : 1,
+                                      '_local_id_2' : 4,
+                                    },
+                    'copy_kernel' : {'name' : None,
+                                     '_g_size_0_c' : 128,
+                                     '_g_size_1_c' : 128,
+                                     '_g_size_2_c' : int(_lambda_1_range_map_out),
+                                     '_local_id_0_c' : 16,
+                                     '_local_id_1_c' : 16,
+                                     '_local_id_2_c' : 1
+                                     },
+                    'second_kernel' : {'name' : None,
+                                       '_g_size_0_s' : 128,
+                                       '_g_size_1_s' : 128,
+                                       '_g_size_2_s' : _common_gid_2_size,
+                                       '_local_id_0_s' : 16,
+                                       '_local_id_1_s' : 16,
+                                       '_local_id_2_s' : 1
+                                       },
+                    'third_kernel'  : {'name' : None,
+                                       '_g_size_0_t' : index_value,
+                                       '_g_size_1_t' : 1,
+                                       '_g_size_2_t' : _common_gid_2_size,
+                                       '_local_id_0_t' : index_value,
+                                       '_local_id_1_t' : 1,
+                                       '_local_id_2_t' : 1
+                                       }
+                    }
+    date = time.strftime('%d-%m-%Y__%H:%M:%S')
+    print(f"Start time: {date}")
+    STATUS = f"data/full_exec_wm_{date}_gwm_{map_aguments['gen_whisker_map']}_it_time_\
+{map_aguments['iteration_time']}_eta_size_\
+{map_aguments['free_parameter_size']}_ensemble_size_\
+{map_aguments['initial_condition_size']}.dat"
+
+
+    input_file = "./data/wm_eta_found_07-03-2026__21:08:00_gwm_False_it_time_100_eta_size_40_ensemble_size_256.dat"
+    Experiment_execution_instance = Experiment_execution_full(STATUS, map_aguments)
+    Experiment_execution_instance.set_program_script('src/one_kernel_form.cl')
+    Experiment_execution_instance.set_file_as_initial_conditions(input_file)
+    start_time = time.time()
+    Experiment_execution_instance.create_device_buffers()
+    Experiment_execution_instance.update_execution_events()
+    Experiment_execution_instance.digest_statistics(STATUS, verbose=True)
+    end_time = (time.time() - start_time)/3600
+    print("Time elapsed: ", end_time)
+

@@ -48,7 +48,7 @@ __kernel void gen_whisker_map(
         uint offset_lambda,
         __global uint *partition_tau,
         __global uint *partition_x,
-        ushort flag_gwm){
+        uint flag_gwm){
 
 
     uint gid_0 = get_global_id(0);
