@@ -1,6 +1,10 @@
 # Generalized Whisker Map  
 This code is part of my thesis work by the name of _Estudio del Mapa de la Separatriz Generalizado_ (Study of a Generalized Whisker Map), to get a 5 years Ba. degree in Astronomy. Developed in Python with OpenCL 1.1 and implemented for GPGPUs.  
-  
+
+
+Tested on AMD ISA RDNA 2.0 (GPU: Navi 22) and GCN 5.1 (GPU: Vega 20).
+
+
 ## About The Code  
 *What this code does?* It calculates the evolution of an ensamble of initial conditions within the chaoctic layer (or stochastic layer) to get the half-width, metric entropy (KS-entropy), mLCE (maximal Lyapunov Caracteristic Exponent), and porosity of the layer.  
   

@@ -35,7 +35,7 @@ Python / OpenCL program.
 Python : (pyopencl, numpy) HOST -> DEVICE (GPU) -> HOST transfers. Statistics calculations.
 OpenCL : Paralelized heavy-duty work. Evolution of the dynamical system defined for the map.
 
-Testd on AMD architectures: RDNA 2.0 (RX 6700 XT) and CGN 5.0 (Vega 20).
+Testd on AMD architectures: RDNA 2.0 (RX 6700 XT) and GCN 5.1 (Vega 20).
 
 --------------------------------------------------------------------------------------------
 Arnold, V. I. (1964). On the instability of dynamic systems with many degrees of
