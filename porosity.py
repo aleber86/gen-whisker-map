@@ -151,6 +151,7 @@ class Experiment_execution_full(Experiment_execution):
     def __init__(self,output_file : str, arguments_of_the_map : dict):
         Experiment_execution.__init__(self, output_file, arguments_of_the_map)
 
+        self.directory = arguments_of_the_map['directory']
         self._save_maps = arguments_of_the_map['save_maps']
         self._save_collisions = arguments_of_the_map['save_collisions']
         self._lambda_1_range_map_out = arguments_of_the_map['map_out_lambda_range']
@@ -347,6 +348,25 @@ class Experiment_execution_full(Experiment_execution):
 
         return ev_shannon
 
+    def save_auxilliary_data_map(self, index_offset  : int) -> None:
+        for name in np.arange(self._lambda_1_range_map_out):
+            file_map = f"{self.directory}/map_\
+{self._lambda_1[index_offset*self._g_size_2 + name*int(self._g_size_2/self._lambda_1_range_map_out)]}.map"
+            file_map_x = f"{self.directory}/map_x_\
+{self._lambda_1[index_offset*self._g_size_2+ name*int(self._g_size_2/self._lambda_1_range_map_out)]}.map"
+
+            with open(file_map, "w") as file, open(file_map_x, "w") as file_x:
+                np.savetxt(file, self.MAP_OUT[:,:,name])
+                np.savetxt(file_x, self.MAP_OUT_x[:,:,name])
+
+    def save_auxilliary_data_collisions(self, index_offset : int, data : tuple) -> None:
+
+        col_step, col_step_x = data
+        file_collision = f"{self.directory}/collision_{self._lambda_1[index_offset*self._g_size_2]}.dat"
+        file_collision_x = f"{self.directory}/collision_x_{self._lambda_1[index_offset*self._g_size_2]}.dat"
+        with open(file_collision, "w") as file_col, open(file_collision_x, "w") as file_col_x:
+            np.savetxt(file_col, col_step)
+            np.savetxt(file_col_x, col_step_x)
 
     def update_execution_events(self):
         total_time = 0.
@@ -429,15 +449,18 @@ class Experiment_execution_full(Experiment_execution):
             #*********************************************************************************************
             end_time = (time.time() - start_time)/3600 # Time estimate
             total_time = total_time + end_time # Total time per chunk
-
+            print(f"Total time: {end_time}")
 
             if self._save_maps:
                 ev_copy_MAP = cl.enqueue_copy(self.OCL_Object.queue, self.MAP_OUT , self.OCL_Object.MAP_OUT_device)
                 ev_copy_MAP_x = cl.enqueue_copy(self.OCL_Object.queue,\
                                                 self.MAP_OUT_x ,self.OCL_Object.MAP_OUT_x_device)
                 cl.wait_for_events([ev_copy_MAP, ev_copy_MAP_x])
+                self.save_auxilliary_data_map(index_offset)
 
-        print(f"Total time: {end_time}")
+            if self._save_collisions:
+                self.save_auxilliary_data_collisions(index_offset, (col_step, col_step_x))
+
         ev_copy_4 = cl.enqueue_copy(self.OCL_Object.queue, self.mLCE, self.OCL_Object.mLCE_device)
         ev_copy_5 = cl.enqueue_copy(self.OCL_Object.queue, self.max_width_matrix , self.OCL_Object.max_width_matrix_device)
         ev_copy_6 = cl.enqueue_copy(self.OCL_Object.queue, self.min_width_matrix , self.OCL_Object.min_width_matrix_device)
@@ -445,26 +468,8 @@ class Experiment_execution_full(Experiment_execution):
         print("TOTAL_TIME: ", total_time)
 
         cl.wait_for_events([ev_copy_4, ev_copy_5, ev_copy_6, ev_copy_7])
-    """
-    def save_auxilliary_data_map(self, index_offset : int, save_flag : bool = False) -> None:
-        if save_flag:
-            for name in np.arange(self._lambda_1_range_map_out):
-                file_map = f"{directory}/map_\
-                    {self._lambda_1[index_offset*self._g_size_2 + name*int(self._g_size_2/self._lambda_1_range_map_out)]}_{suffix}.map"
-                file_map_x = f"{directory}/map_x_\
-                    {self._lambda_1[index_offset*self._g_size_2+ name*int(self._g_size_2/sefl._lambda_1_range_map_out)]}_{suffix}.map"
 
-                with open(file_map, "w") as file, open(file_map_x, "w") as file_x:
-                    np.savetxt(file, MAP_OUT[:,:,name])
-                    np.savetxt(file_x, MAP_OUT_x[:,:,name])
 
-        if self._save_collisions:
-            file_collision = f"{directory}/collision_{array_lambda_1[index_offset*_g_size_2]}_{suffix}.dat"
-            file_collision_x = f"{directory}/collision_x_{array_lambda_1[index_offset*_g_size_2]}_{suffix}.dat"
-            with open(file_collision, "w") as file_col, open(file_collision_x, "w") as file_col_x:
-                np.savetxt(file_col, col_step)
-                np.savetxt(file_col_x, col_step_x)
-    """
     def digest_statistics(self,file_name, _axis = 1, verbose = False) -> np.array:
         #Maximal Lyapunov characteristic exponent (MEGNO) shape: (_lambda_1_range)
         mlce =2.*np.fabs(np.mean(self.mLCE, axis=1) - 2.)/_wp(self._max_iter)
@@ -556,13 +561,13 @@ class Experiment_execution_full(Experiment_execution):
         self.OCL_Object.free_buffer("counter_array_collision_x_device")
 
 if __name__ == '__main__':
-    _dim_ensemble = 256
+    _dim_ensemble = 128
     _common_gid_2_size = 128
     _lambda_1_range_map_out = 1
     index_value = _dim_ensemble
     if index_value > 256: index_value = 256
 
-    map_aguments = {'iteration_time' : 10**4,
+    map_aguments = {'iteration_time' : 10**7,
                     'initial_condition_size' : _dim_ensemble,
                     'free_parameter_size' : 1,
                     'omega_2_size' : 1,
@@ -571,11 +576,12 @@ if __name__ == '__main__':
                     'lambda_1_step' : _wp(0.01),
                     'spread_from_center' : _wp(1.e-7),
                     'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
-                    'gen_whisker_map' : True,
+                    'gen_whisker_map' : False,
                     'explicit_eta' : None,
                     'pre_catched_eta' : True,
-                    'raster_size' : {'_dim_ang' : 512,
-                                     '_dim_y' : 512},
+                    'raster_size' : {'_dim_ang' : 2048,
+                                     '_dim_y' : 4096},
+                    'directory' : 'data',
                     'map_out_lambda_range' : _lambda_1_range_map_out,
                     'save_collisions' : False,
                     'save_maps' : False,
@@ -620,7 +626,7 @@ if __name__ == '__main__':
 {map_aguments['initial_condition_size']}.dat"
 
 
-    input_file = "./data/wm_eta_found_07-03-2026__21:08:00_gwm_False_it_time_100_eta_size_40_ensemble_size_256.dat"
+    input_file = "./data/resultados_640.dat"
     Experiment_execution_instance = Experiment_execution_full(STATUS, map_aguments)
     Experiment_execution_instance.set_program_script('src/one_kernel_form.cl')
     Experiment_execution_instance.set_file_as_initial_conditions(input_file)
@@ -628,6 +634,7 @@ if __name__ == '__main__':
     Experiment_execution_instance.create_device_buffers()
     Experiment_execution_instance.update_execution_events()
     Experiment_execution_instance.digest_statistics(STATUS, verbose=True)
+    Experiment_execution_instance.free_all_global_buffers()
     end_time = (time.time() - start_time)/3600
     print("Time elapsed: ", end_time)
 

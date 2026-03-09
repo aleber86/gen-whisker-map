@@ -3,7 +3,7 @@
 
 #include"jacobian.h"
 #include"modulus.h"
-#define MAXITER 10000
+#define MAXITER 1000000
 
 
 void index_finder(int offset, double spread_value, 

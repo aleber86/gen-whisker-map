@@ -236,7 +236,7 @@ class Experiment_execution(Evolution_eta_finder):
         #
 
 if __name__ == '__main__':
-    map_aguments = {'iteration_time' : 10**4,
+    map_aguments = {'iteration_time' : 10**7,
                     'initial_condition_size' : 256,
                     'free_parameter_size' : 40,
                     'omega_2_size' : 1,
@@ -244,7 +244,7 @@ if __name__ == '__main__':
                     'lambda_1_ini' : _wp(5.0),
                     'lambda_1_step' : _wp(0.01),
                     'spread_from_center' : _wp(1.e-7),
-                    'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
+                    'omega_2_initial_condition' : _wp(np.sqrt(1.7)),
                     'gen_whisker_map' : False,
                     'explicit_eta' : None,
                     'pre_catched_eta' : False,
@@ -254,11 +254,13 @@ if __name__ == '__main__':
                                                    map_aguments['lambda_1_size']),
                                   'local_size' : (4,4,4)}
     date = time.strftime('%d-%m-%Y__%H:%M:%S')
+    omega_2 = ""
+    if map_aguments['gen_whisker_map'] : omega_2 = f"_{map_aguments['omega_2_initial_condition']}"
     print(f"Start time: {date}")
     STATUS = f"data/wm_eta_found_{date}_gwm_{map_aguments['gen_whisker_map']}_it_time_\
 {map_aguments['iteration_time']}_eta_size_\
 {map_aguments['free_parameter_size']}_ensemble_size_\
-{map_aguments['initial_condition_size']}.dat"
+{map_aguments['initial_condition_size']}{omega_2}.dat"
 
     Experiment_execution_instance = Experiment_execution(STATUS, arguments_of_the_map=map_aguments)
     Experiment_execution_instance.set_program_script('src/kernel_lambda_1_form.cl')
