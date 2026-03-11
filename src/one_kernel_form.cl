@@ -4,6 +4,7 @@
 #include"jacobian.h"
 #include"modulus.h"
 #define MAXITER
+#define GWM_FLAG 
 
 
 void index_finder(int offset, double spread_value, 
@@ -47,8 +48,8 @@ __kernel void gen_whisker_map(
         __global uint *LCE_MAP_x,
         uint offset_lambda,
         __global uint *partition_tau,
-        __global uint *partition_x,
-        uint flag_gwm){
+        __global uint *partition_x){
+        //uint GWM_FLAG){
 
 
     uint gid_0 = get_global_id(0);
@@ -69,7 +70,7 @@ __kernel void gen_whisker_map(
     double ang = dpi/(double)dim_ang, y_scale = 2.*_half[index_global]/(double)dim_y; 
     int y_offset = (int)(dim_y / 2);
     uint index_buff_c, index_buff_c_x, index_buff_p, index_buff_p_x;
-    if(flag_gwm==0){
+    if(GWM_FLAG==0){
         x = (double) 0.;
         v_element = (double) 0.;
         omega_2_element = (double)0.;
@@ -85,7 +86,6 @@ __kernel void gen_whisker_map(
         y = initial_conditions[gid_0*3 + 2];
         eta_element = eta[index_global];
         //WATCHOUT DEFINED FOR WM:
-        //eta_element = 3.09108;
         v_element = v[index_global];
         //*******************************************
         omega_2_element = omega_2[index_global];
@@ -104,7 +104,7 @@ __kernel void gen_whisker_map(
             log_f_y = log(fabs(y)); //<-----------------This register will change bellow!
             t = t - lambda_1 * log_f_y +   eta_element;
             //WATCHOUT CONDITIONS FOR WM:
-            if(flag_gwm==1){
+            if(GWM_FLAG==1){
                 x = x - lambda_2_element* log_f_y + omega_2_element*eta_element;
                 x = modulus(x, dpi);
             }
@@ -138,7 +138,7 @@ __kernel void gen_whisker_map(
                 index_buff_p = (uint)((gid_2*dim_ang + angular)*gsz_0 + gid_0);
                 LCE_MAP[index_buff_c] ++ ;
                 partition_tau[index_buff_p] ++;
-                if(flag_gwm == 1){
+                if(GWM_FLAG == 1){
                     //Find x index
                     index_finder(0, ang, x, dim_ang, &angular_x);
                     index_buff_c_x = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular_x));

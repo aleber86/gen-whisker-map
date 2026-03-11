@@ -283,7 +283,7 @@ class Experiment_execution_full(Experiment_execution):
                                             _wpui(lambda_offset_it),
                                             self.OCL_Object.partition_tau_device,
                                             self.OCL_Object.partition_x_device,
-                                            self._GWM_FLAG,
+                                            #self._GWM_FLAG,
                                             wait_for = None
                                             )
         return ev1
@@ -567,7 +567,7 @@ if __name__ == '__main__':
     index_value = _dim_ensemble
     if index_value > 256: index_value = 256
 
-    map_aguments = {'iteration_time' : 10**7,
+    map_aguments = {'iteration_time' : 10**4,
                     'initial_condition_size' : _dim_ensemble,
                     'free_parameter_size' : 1,
                     'omega_2_size' : 1,

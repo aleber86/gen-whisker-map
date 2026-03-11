@@ -3,6 +3,9 @@
 #include"modulus.h"
 #include"jacobian.h"
 #define MAXITER  
+#define GWM_FLAG
+#define ONE_ETA_FLAG
+#define EXPLICIT_ETA
 
 __kernel void gen_whisker_map(__global double *initial_conditions, 
         __global double *output_matrix, 
@@ -13,11 +16,7 @@ __kernel void gen_whisker_map(__global double *initial_conditions,
         __global double *v, 
         __global double *eta,
         __global double* omega_2, 
-        int dimension,
-        __global double* mu,
-        int GWM_FLAG,
-        int ONE_ETA_FLAG,
-        int EXPLICIT_ETA){
+        __global double* mu){
 
     int gid_0 = get_global_id(0);
     int gsz_0 = get_global_size(0);

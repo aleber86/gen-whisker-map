@@ -126,6 +126,9 @@ class Experiment_execution(Evolution_eta_finder):
         with open(program_form, 'r') as file_to_change:
             script = file_to_change.read()
             script = script.replace("#define MAXITER", f"#define MAXITER {self._max_iter}")
+            script = script.replace("#define GWM_FLAG", f"#define GWM_FLAG {self._GWM_FLAG}")
+            script = script.replace("#define ONE_ETA_FLAG", f"#define ONE_ETA_FLAG {self._ONE_ETA_FLAG}")
+            script = script.replace("#define EXPLICIT_ETA", f"#define EXPLICIT_ETA {self._EXPLICIT_ETA}")
         with open('src/kernel_lambda_1.cl', 'w') as file:
             file.write(script)
         self.OCL_Object.program(inculuded, ['-I ./includes'])
@@ -134,7 +137,6 @@ class Experiment_execution(Evolution_eta_finder):
         _global_size = opencl_arguments['global_size']
         _local_size = opencl_arguments['local_size']
 
-        _max_iter = _wpi(self._max_iter)
         ev_1 =self.OCL_Object.kernel.gen_whisker_map(self.OCL_Object.queue, _global_size, _local_size,
                                             self.OCL_Object.initial_conditions_device,
                                             self.OCL_Object.output_matrix_device,
@@ -144,11 +146,12 @@ class Experiment_execution(Evolution_eta_finder):
                                             self.OCL_Object.lambda_2_device,
                                             self.OCL_Object.v_device,
                                             self.OCL_Object.initial_conditions_eta_device,
-                                            self.OCL_Object.omega_2_device, _max_iter,
-                                            self.OCL_Object.mu_device,
-                                            self._GWM_FLAG,
-                                            self._ONE_ETA_FLAG,
-                                            self._EXPLICIT_ETA)
+                                            self.OCL_Object.omega_2_device,
+                                            #_max_iter,
+                                            self.OCL_Object.mu_device)
+                                            #self._GWM_FLAG,
+                                            #self._ONE_ETA_FLAG,
+                                            #self._EXPLICIT_ETA)
         cl.wait_for_events([ev_1])
         ev_copy_1 = cl.enqueue_copy(self.OCL_Object.queue,\
                         self.output_mLCE_matrix, self.OCL_Object.output_matrix_device)

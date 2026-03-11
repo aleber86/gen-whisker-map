@@ -20,6 +20,9 @@ class Experiment_execution_using_file(Experiment_execution):
             self._lambda_2 = array_input[:,1].copy()
             self.mu = array_input[:,3].copy()
             self.initial_conditions_eta = array_input[:,4].copy()
+        if self.explicit_eta is not None:
+            self.initial_conditions_eta = np.ones_like(self.initial_conditions_eta,\
+                                                       dtype = _wp) * self.explicit_eta
 
     def digest_statistics(self, ensemble_axis = 0, eta_axis = 0, verbose = False) -> np.array:
 
@@ -52,7 +55,7 @@ class Experiment_execution_using_file(Experiment_execution):
 
 if __name__ == '__main__':
 
-    map_aguments = {'iteration_time' : 10**4,
+    map_aguments = {'iteration_time' : 10**7,
                     'initial_condition_size' : 256,
                     'free_parameter_size' : 1,
                     'omega_2_size' : 1,
@@ -61,8 +64,8 @@ if __name__ == '__main__':
                     'lambda_1_step' : _wp(0.01),
                     'spread_from_center' : _wp(1.e-7),
                     'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
-                    'gen_whisker_map' : False,
-                    'explicit_eta' : None,
+                    'gen_whisker_map' : True,
+                    'explicit_eta' : 4.852340625778730931e+00,
                     'pre_catched_eta' : True
                     }
     opencl_arguments_structure = {'global_size' : (map_aguments['initial_condition_size'],
