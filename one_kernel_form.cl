@@ -48,7 +48,13 @@ __kernel void gen_whisker_map(
         uint offset_lambda,
         __global uint *partition_tau,
         __global uint *partition_x,
+<<<<<<< Updated upstream:one_kernel_form.cl
         ushort flag_gwm){
+=======
+        __local uint *partition_t_local,
+        __local uint *partition_x_local){
+        //uint GWM_FLAG){
+>>>>>>> Stashed changes:src/one_kernel_form.cl
 
 
     uint gid_0 = get_global_id(0);
@@ -57,9 +63,21 @@ __kernel void gen_whisker_map(
     uint gsz_1 = get_global_size(1);
     uint gid_2 = get_global_id(2);
     uint gsz_2 = get_global_size(2);
+    uint lid_0 = get_local_id(0);
+    uint lsz_0 = get_local_size(0);
+    uint lid_2 = get_local_id(2);
+    uint lsz_2 = get_local_size(2);
+    uint grp_id_0 = get_group_id(0);
+    uint grp_sz_0 = get_num_groups(0);
+    uint LOCAL_SZ_1 = (uint)(dim_ang/lsz_0);
      
     if(gid_0 >= gsz_0 || gid_1 >= gsz_1 || gid_2>= gsz_2) return;
-
+    
+    for(uint j = 0; j<LOCAL_SZ_1; j++){
+        partition_t_local[lid_2*dim_ang + lid_0*LOCAL_SZ_1 + j] = 0;
+        if(GWM_FLAG)partition_x_local[lid_2*dim_ang + lid_0*LOCAL_SZ_1 + j] = 0;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
     uint index_global = gid_2 + offset_lambda ;
     double x,t,y;
     double3 tangent; 
@@ -75,6 +93,7 @@ __kernel void gen_whisker_map(
         omega_2_element = (double)0.;
     }
 
+<<<<<<< Updated upstream:one_kernel_form.cl
         double Y_m_n = 0., MEGNO = 0.;
         double  lyapunov = 0., eta_element, MLCE = 0.;
         double max_width = 0.0, min_width = 0.0;
@@ -146,15 +165,119 @@ __kernel void gen_whisker_map(
                     LCE_MAP_x[index_buff_c_x] ++;
                     partition_x[index_buff_p_x] ++;
                 }
-        }
-        MLCE = Y_m_n / (double)MAXITER;
+=======
+    double Y_m_n = 0., MEGNO = 0.;
+    double  lyapunov = 0., eta_element, MLCE = 0.;
+    double max_width = 0.0, min_width = 0.0;
+    x = initial_conditions[gid_0*3 + 0];
+    //WATCHOUT DEFINED FOR WM:
+    //*******************************************
+    t = initial_conditions[gid_0*3 + 1];
+    y = initial_conditions[gid_0*3 + 2];
+    eta_element = eta[index_global];
+    //WATCHOUT DEFINED FOR WM:
+    v_element = v[index_global];
+    //*******************************************
+    omega_2_element = omega_2[index_global];
+    lambda_2_element = lambda_2[index_global];
+    lambda_1 = lambda_1_arr[index_global];
+    
 
-        //index_global <----------CHANGE
-        index_global = index_global * gsz_0 + gid_0;
-        output_matrix[index_global] = lyapunov/(double)MAXITER;
-        mLCE[index_global] = MLCE;
-        max_width_matrix[index_global] = max_width;
-        min_width_matrix[index_global] = min_width;
+    //WATCHOUT! CONDITIONS FOR WM:
+    double const inv_lambda_1 = (double)1./lambda_1;
+    double log_f_y;
+    tangent = (double3)(sin((double)(gid_0 + gsz_1)), 
+                            cos((double)(gid_1 + gsz_0)), 
+                            tan((double)(gid_1 + gsz_1)));
+
+
+    for (long i = 1; i < MAXITER+1; i++){
+        y = y + inv_lambda_1* sin(t) - v_element*inv_lambda_1 * cos(x);
+        log_f_y = log(fabs(y)); //<-----------------This register will change bellow!
+        t = t - lambda_1 * log_f_y +   eta_element;
+        //WATCHOUT CONDITIONS FOR WM:
+        if(GWM_FLAG==1){
+            x = x - lambda_2_element* log_f_y + omega_2_element*eta_element;
+            x = modulus(x, dpi);
+>>>>>>> Stashed changes:src/one_kernel_form.cl
+        }
+        else{
+
+        x = (double) 0.;
+        }
+        //*****************************************************************
+        t = modulus(t, dpi);
+        tangent = jacobian(x, t, y, lambda_1, inv_lambda_1, lambda_2_element, v_element, tangent);
+        //norma = length(tangent);
+        //Reuse of register log_f_y <---------------------WATCHOUT
+        log_f_y = log(length(tangent));
+        tangent = normalize(tangent);
+        lyapunov += log_f_y; 
+        MEGNO += 2.*log_f_y*((double)i);
+        Y_m_n += MEGNO/((double)i); 
+        //Find t index
+        index_finder(0, ang, t, dim_ang, &angular);
+        //Find y of t index
+        index_finder(y_offset, y_scale, y, y_offset, &y_wide);
+
+
+        if (max_width < y){
+            max_width = y;
+        }
+        if (min_width >= y){
+            min_width = y;
+        }
+
+        //atom_add(partition_t_local+angular,1);
+//            index_buff_p = (uint)((gid_2*dim_ang + angular)*gsz_0 + gid_0);
+        index_buff_c = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular));
+        
+        //atom_add(partition_t_local+angular,1);
+        atom_add(LCE_MAP + index_buff_c,1);
+        atom_add(partition_t_local+lid_2*dim_ang+angular,1);
+//            atom_add(partition_tau+index_buff_p, 1);
+        if(GWM_FLAG == 1){
+            //Find x index
+            index_finder(0, ang, x, dim_ang, &angular_x);
+            index_buff_c_x = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular_x));
+            //index_buff_p_x = (uint)((gid_2*dim_ang + angular_x)*gsz_0 + gid_0);
+            atom_add(LCE_MAP_x+index_buff_c_x,1);
+            //atom_add(partition_x_local+angular_x, 1);
+            atom_add(partition_x_local+lid_2*dim_ang+angular_x,1);
+            //atom_add(partition_x+index_buff_p_x,1);
+        }
+
+        /*
+        index_buff_c = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular));
+        index_buff_p = (uint)((gid_2*dim_ang + angular)*gsz_0 + gid_0);
+        atom_add(LCE_MAP + index_buff_c,1);
+        atom_add(partition_tau+index_buff_p, 1);
+        if(GWM_FLAG == 1){
+            //Find x index
+            index_finder(0, ang, x, dim_ang, &angular_x);
+            index_buff_c_x = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular_x));
+            index_buff_p_x = (uint)((gid_2*dim_ang + angular_x)*gsz_0 + gid_0);
+            atom_add(LCE_MAP_x+index_buff_c_x,1);
+            atom_add(partition_x+index_buff_p_x,1);
+        }*/
+    }
+    MLCE = Y_m_n / (double)MAXITER;
+
+    //index_global <----------CHANGE
+    index_global = index_global * gsz_0 + gid_0;
+    output_matrix[index_global] = lyapunov/(double)MAXITER;
+    mLCE[index_global] = MLCE;
+    max_width_matrix[index_global] = max_width;
+    min_width_matrix[index_global] = min_width;
+    
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for(uint j = 0; j<LOCAL_SZ_1; j++){
+        partition_tau[(((gid_2*lsz_2+lid_2)*dim_ang + lid_0*LOCAL_SZ_1+j))*grp_sz_0+grp_id_0]=partition_t_local[lid_2*dim_ang + lid_0*LOCAL_SZ_1 + j];
+        if(GWM_FLAG){
+            partition_x[(((gid_2*lsz_2+lid_2)*dim_ang + lid_0*LOCAL_SZ_1+j))*grp_sz_0+grp_id_0]=partition_x_local[lid_2*dim_ang + lid_0*LOCAL_SZ_1 + j];
+        }
+    }
+
 }
 
 __kernel void copy_map(__global uint *LCE_MAP,
@@ -265,7 +388,8 @@ __kernel void Shannon_entropy(__global uint *partition_tau,
                               __global double *counter_information_tau,
                               __global double *counter_information_x,
                               uint partition_size,
-                              uint dim_essamble
+                              uint groups_1,
+                              uint groups_2
                               ){
 
     uint gid_0 = get_global_id(0);
@@ -281,16 +405,20 @@ __kernel void Shannon_entropy(__global uint *partition_tau,
     double counter_x = 0.;
     counter_information_tau[j*gsz_2 + gid_2] = 0;
     counter_information_x[j*gsz_2 + gid_2] = 0;
-        for(uint i = 0; i<dim_essamble; i++){
-            //counter += (double)partition_tau[(i*partition_size+ j)*gsz_2 + gid_2];
-            //counter_x += (double)partition_x[(i*partition_size+ j)*gsz_2 + gid_2];
-            counter += (double)partition_tau[(gid_2 * partition_size + j) * dim_essamble + i ];
-            counter_x += (double)partition_x[(gid_2 * partition_size + j) * dim_essamble + i ];
-            //partition_tau[(i*partition_size+ j)*gsz_2 + gid_2] = 0;
-            //partition_x[(i*partition_size+ j)*gsz_2 + gid_2] = 0;
-            partition_tau[(gid_2 * partition_size + j) * dim_essamble + i ] = 0;
-            partition_x[(gid_2 * partition_size + j) * dim_essamble + i ] = 0;
+        for(uint i = 0; i<groups_1; i++){
+            for(uint k = 0; k<groups_2; k++){
+                //counter += (double)partition_tau[(i*partition_size+ j)*gsz_2 + gid_2];
+                //counter_x += (double)partition_x[(i*partition_size+ j)*gsz_2 + gid_2];
+                //printf("partition_t: %u",partition_tau[(gid_2 * partition_size + j) * groups_1 + i ]);
+                counter += (double)partition_tau[(((gid_2*groups_2+k)*partition_size + j))* groups_1 + i ];
+                counter_x += (double)partition_x[(((gid_2*groups_2+k)*partition_size + j) )* groups_1 + i  ];
+                //partition_tau[(i*partition_size+ j)*gsz_2 + gid_2] = 0;
+                //partition_x[(i*partition_size+ j)*gsz_2 + gid_2] = 0;
+                partition_tau[(((gid_2*groups_2+k)*partition_size + j) )* groups_1 + i  ] = 0;
+                partition_x[(((gid_2*groups_2+k)*partition_size + j) )* groups_1 + i ]  = 0;
+            }
         }
+        //printf("total_count_t : %f, total_count_x: %f",counter, counter_x);
     if(counter!=0){
         counter_information_tau[j*gsz_2 + gid_2] = counter * log(counter);
     }

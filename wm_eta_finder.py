@@ -103,6 +103,7 @@ OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], 
 #************************************************************************************************************
 _max_iter = _wpi(_max_iter)
 
+<<<<<<< Updated upstream
 ev_1 = OCL_Object.kernel.gen_whisker_map(OCL_Object.queue,(_g_size_0, _g_size_1, _g_size_2),_local,
                                     OCL_Object.initial_conditions_device,
                                     OCL_Object.output_matrix_device,
@@ -120,6 +121,41 @@ cl.wait_for_events([ev_1])
 cl.enqueue_copy(OCL_Object.queue, output_matrix, OCL_Object.output_matrix_device)
 cl.enqueue_copy(OCL_Object.queue, max_width_matrix, OCL_Object.max_width_matrix_device)
 cl.enqueue_copy(OCL_Object.queue, min_width_matrix, OCL_Object.min_width_matrix_device)
+=======
+    def set_initial_conditions_free_parameter(self):
+
+        if self.explicit_eta is None:
+            #initial_conditions_eta = np.random.uniform(0.01, 2.*_pi, size=self._dim_eta)
+            initial_conditions_eta = np.linspace(0., 2*np.pi, self._dim_eta, dtype=_wp)
+            initial_conditions_eta[np.where(initial_conditions_eta<0.)] = \
+                initial_conditions_eta[np.where(initial_conditions_eta<0.)] + 2.*_pi
+        else:
+            initial_conditions_eta = np.ones((self._dim_eta,), dtype=_wp)
+        initial_conditions_eta.astype(_wp)
+        return initial_conditions_eta
+
+    def set_initial_conditions_omega_2(self):
+        array_omega_2 = np.array([self._omega_2_ini + self._step * i\
+                                  for i in np.arange(self._omega_2_range)], dtype=_wp)
+        return array_omega_2
+
+    def set_upsilon(self, gen_whisker_map = True) -> np.array:
+        _v_zero = 0.
+        if gen_whisker_map:
+            _v_zero = 1.
+        array_upsilon = self.initial_conditions_omega_2**2 *np.sinh(_pi*self._lambda_1/2.)\
+            /np.sinh(self._lambda_1*_pi/2.*self.initial_conditions_omega_2)
+
+        array_upsilon = array_upsilon * _v_zero
+
+        return array_upsilon
+
+    def set_mu(self) -> np.array:
+
+        mu = np.array([np.random.uniform(1.e-12,1.e-8)\
+                       for _ in np.arange(self._dim_eta)], dtype=_wp)
+        return mu
+>>>>>>> Stashed changes
 
 
 file_name_aux = f"data/aux_{_max_iter}_eta_size_{_dim_eta}"\
@@ -171,6 +207,7 @@ for ind in np.arange(_lambda_1_range):
     mLCE_vec = output_matrix[:, index_1[0][0], ind]
     mLCE = np.max(mLCE_vec)
 
+<<<<<<< Updated upstream
     #c = array_initial_conditions_eta[ind,index[1][0]]
     print(index_1[0][0])
     c = array_initial_conditions_eta[index_1[0][0]]
@@ -189,6 +226,34 @@ for ind in np.arange(_lambda_1_range):
 end_time = (time.time() - start_time)/3600
 np.savetxt(file_aux, _to_aux_file)
 #
+=======
+if __name__ == '__main__':
+    map_aguments = {'iteration_time' : 10**7,
+                    'initial_condition_size' : 128,
+                    'free_parameter_size' : 40,
+                    'omega_2_size' : 1,
+                    'lambda_1_size' : 128,
+                    'lambda_1_ini' : _wp(5.0),
+                    'lambda_1_step' : _wp(0.01),
+                    'spread_from_center' : _wp(1.e-7),
+                    'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
+                    'gen_whisker_map' : False,
+                    'explicit_eta' : None,
+                    'pre_catched_eta' : False,
+                    }
+    opencl_arguments_structure = {'global_size' : (map_aguments['initial_condition_size'],
+                                                   map_aguments['free_parameter_size'],
+                                                   map_aguments['lambda_1_size']),
+                                  'local_size' : (4,4,4)}
+    date = time.strftime('%d-%m-%Y__%H:%M:%S')
+    omega_2 = ""
+    if map_aguments['gen_whisker_map'] : omega_2 = f"_{map_aguments['omega_2_initial_condition']}"
+    print(f"Start time: {date}")
+    STATUS = f"data/wm_eta_found_{date}_gwm_{map_aguments['gen_whisker_map']}_it_time_\
+{map_aguments['iteration_time']}_eta_size_\
+{map_aguments['free_parameter_size']}_ensemble_size_\
+{map_aguments['initial_condition_size']}{omega_2}.dat"
+>>>>>>> Stashed changes
 
 
 print(f"Total time: {end_time}")

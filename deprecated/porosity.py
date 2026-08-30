@@ -1,4 +1,58 @@
-"""Calculo de 'whisker map' generalizado"""
+"""
+Script calculates a generalized separatrix map (generalized whisker map) proposed
+by Chirikov (1979) to estimate the diffusion coefficient in Arnold's model (Arnold 1964).
+The map has 2 phase variables (t,x) and 1 action-like variable (y) afected by a term \\upsilon that
+depends heavily on a frequency \\omega_2.
+Chirikov (1979) obtains the diffusion coefficient under the assumption that, when one of the
+phase variables is correlated, the other is random. If \\upsilon << 1 and \\omega_2 > 1 then t is correlated,
+and x is random. However, if \\upsilon >> 1 and 0 < \\omega_2 < 1 then x is correlated and t is random
+(see Cincotta et al., 2022).
+
+
+
+* The output of the model contains:
+
+-   Porosity of the layer.
+-   Half-width of the layer.
+-   Maximal Lyapunov characteristic exponent.
+-   Metric entropy.
+-   Phase correlations using Shannon entropy (implementation of Information defined by Cincotta & Giordano, 2018).
+
+*
+
+As a generalized separatrix map we may use it to calculate the case of
+\\omega_2 = 0, and get the pendullum separatrix map.
+
+
+*****For an extended explanaiton of the code,  see:
+
+http://sedici.unlp.edu.ar/handle/10915/189876
+"Estudio del mapa de la separatriz generalizado", ch. 7.
+                                                   *****
+
+
+Python / OpenCL program.
+Python : (pyopencl, numpy) HOST -> DEVICE (GPU) -> HOST transfers. Statistics calculations.
+OpenCL : Paralelized heavy-duty work. Evolution of the dynamical system defined for the map.
+
+Testd on AMD architectures: RDNA 2.0 (RX 6700 XT) and CGN 5.0 (Vega 20).
+
+--------------------------------------------------------------------------------------------
+Arnold, V. I. (1964). On the instability of dynamic systems with many degrees of
+freedom. Dokl. Akad, Nauk SSSR.
+
+Chirikov, B. V. (1979). A universal instability of many-dimensional oscillator sys-
+tems. Physics Reports, 52(5):263–379.
+
+
+Cincotta, P. M. y Giordano, C. M. (2018). Phase correlations in chaotic dyna-
+mics: a Shannon entropy measure. Celestial Mechanics and Dynamical Astronomy,
+130(11):74.
+
+Cincotta, P. M., Giordano, C. M., y Shevchenko, I. I. (2022). Diffusion and Lyapunov
+timescales in the Arnold model. Phys. Rev. E, 106:044205.
+
+"""
 
 import pyopencl as cl
 import numpy as np
@@ -39,6 +93,7 @@ def information_shannon_entropy(partition_cardinal : int, number_of_orbits : int
     Returns:
         information_array : information of the phase variable of the map (if ratio = True, returns
         information / information of a random orbit)
+
 
     """
 
@@ -103,12 +158,12 @@ def main():
     SPREAD = _wp(1.e-7) #Spread of ensemble
     _max_iter = _wpui(10**_it_step) #Iteration time function of _it_step
     _dim_ensemble = _wpui(256) #Ensemble size
-    _lambda_1_range = _wpui(1536) #Use 128 multiple
+    _lambda_1_range = _wpui(128) #Use 128 multiple
     _lambda_1_range_map_out = _wpui(1) #Maps to save as graphics! This could skyrocket the memory usage
     _common_gid_2_size = 128 # Size of chunks in lambda space. Change at will
     _save_maps = False # Save map flag. True, saves _lambda_1_range_map_out number per chunk
     _save_collisions = False # Save collision values flag. True, saves the difference between total points and rastered.
-    _gwm_flag = _wpushort(1) # GENERALIZED WHISKER MAP. True, calc (x,t,y). False (t,y)
+    _gwm_flag = _wpushort(0) # GENERALIZED WHISKER MAP. True, calc (x,t,y). False (t,y)
 
 
 
@@ -126,7 +181,6 @@ def main():
 
     #COPY KERNEL
 
-<<<<<<< Updated upstream
     _g_size_0_c = 128
     _g_size_1_c = 128
     _g_size_2_c = int(_lambda_1_range_map_out)
@@ -134,39 +188,6 @@ def main():
     _local_id_1_c = 16 #Second Kernel
     #_local_id_2 = 10
     _local_id_2_c = 1 #Second Kernel
-=======
-        self.output_matrix = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype=_wp)
-        self.max_width_matrix = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype=_wp)
-        self.min_width_matrix = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype=_wp)
-        self.counter_array = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s), dtype=_wpui)
-        self.counter_array_x = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s), dtype=_wpui)
-        self.counter_array_collision = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s), dtype=_wpui)
-        self.counter_array_collision_x = np.zeros((_grp_sz_0*_grp_sz_1, self._g_size_2_s),\
-                                                  dtype=_wpui)
-        self.CONSTANT_MAX_POINTS_ADDED = np.ones(self._g_size_2_s, dtype = _wp) *\
-            _wp(self._dim_ensemble) * _wp(self._max_iter)
-        self.CONSTANT_MAX_POINTS_ADDED = self.CONSTANT_MAX_POINTS_ADDED.astype(_wp)
-        self.LCE_MAP = np.zeros(( self._g_size_2,self._dim_y,self._dim_ang), dtype = _wpui)
-        self.LCE_MAP_x = np.zeros(( self._g_size_2,self._dim_y, self._dim_ang), dtype = _wpui)
-        self.mLCE = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype = _wp)
-
-        #self.partition_tau = np.zeros((self._g_size_2_t, self._dim_ang, self._dim_ensemble), dtype = _wpui)
-        #self.partition_x = np.zeros((self._g_size_2_t, self._dim_ang, self._dim_ensemble), dtype = _wpui)
-
-        self.partition_tau = np.zeros((self._g_size_2*self._local_id_2, self._dim_ang, int(self._dim_ensemble/self._local_id_0)), dtype = _wpui)
-        self.partition_x = np.zeros((self._g_size_2_t*self._local_id_2, self._dim_ang, int(self._dim_ensemble/self._local_id_0)), dtype = _wpui)
-
-        self.counter_information_tau = np.zeros((self._dim_ang, self._g_size_2_t), dtype=_wp)
-        self.counter_information_x = np.zeros((self._dim_ang, self._g_size_2_t), dtype=_wp)
-        #WATCH OUT  !!!!!!!!
-        self.MAP_OUT = np.zeros((int(self._dim_y)*int(self._dim_ang), 3, self._lambda_1_range_map_out), dtype = _wpf)
-        self.MAP_OUT_x = np.zeros((int(self._dim_y)*int(self._dim_ang), 3, self._lambda_1_range_map_out), dtype = _wpf)
-        self.array_to_file = np.zeros((self._lambda_1_range, 27), _wp) #Creates array to save final output
-        self.array_half = np.empty_like(self._lambda_1, dtype=_wp)
-        if ~self._GWM_FLAG:
-            self.initial_conditions_omega_2 = np.zeros_like(self.initial_conditions_omega_2, dtype = _wp)
-            self.upsilon = np.zeros_like(self.upsilon, dtype=_wp)
->>>>>>> Stashed changes
 
     #SECOND KERNEL ATRIBS
     _g_size_0_s = 128
@@ -202,7 +223,7 @@ def main():
     array_initial_conditions = np.array(np.random.uniform(-1,1, (_dim_ensemble, 3)), dtype=_wp) * _wp(SPREAD)
 
     #Read model paramenters from file
-    with open('./pre_cached_wm_128_elements.dat', 'r') as file:
+    with open('./data/aux_eta_pre_cached_10000000_eta_size_1_rand_seed_34567890_gwm_256_eta_7_2.5.dat', 'r') as file:
         array_file_initial_conditions = np.loadtxt(file, dtype = _wp)
 
     array_lambda_1 = array_file_initial_conditions[:,0].copy()
@@ -216,7 +237,6 @@ def main():
 
     del array_file_initial_conditions #Redundant object
 
-<<<<<<< Updated upstream
     if ~_gwm_flag:
         array_omega_2 = np.zeros_like(array_omega_2, dtype = _wp)
         array_v = np.zeros_like(array_v, dtype=_wp)
@@ -324,65 +344,6 @@ def main():
                                             OCL_Object.partition_tau_device,
                                             OCL_Object.partition_x_device,
                                             _gwm_flag
-=======
-        self.OCL_Object.buffer_global(self.array_half, "half", False)
-        self.OCL_Object.buffer_global(self.initial_conditions, "initial_conditions", False)
-        self.OCL_Object.buffer_global(self.initial_conditions_eta, "initial_conditions_eta", False)
-        self.OCL_Object.buffer_global(self.initial_conditions_omega_2, "omega_2", False)
-        self.OCL_Object.buffer_global(self.upsilon, "v", False)
-        self.OCL_Object.buffer_global(self._lambda_2, "lambda_2", False)
-        self.OCL_Object.buffer_global(self._lambda_1, "lambda_1", False)
-        self.OCL_Object.buffer_global(self.output_matrix, "output_matrix")
-        self.OCL_Object.buffer_global(self.max_width_matrix, "max_width_matrix")
-        self.OCL_Object.buffer_global(self.min_width_matrix, "min_width_matrix")
-        self.OCL_Object.buffer_global(self.counter_array, "counter_array")
-        self.OCL_Object.buffer_global(self.counter_array_x, "counter_array_x")
-        self.OCL_Object.buffer_global(self.mLCE, "mLCE")
-        self.OCL_Object.buffer_global(self.LCE_MAP, "LCE_MAP")
-        self.OCL_Object.buffer_global(self.LCE_MAP_x, "LCE_MAP_x")
-        self.OCL_Object.buffer_global(self.MAP_OUT, "MAP_OUT")
-        self.OCL_Object.buffer_global(self.MAP_OUT_x, "MAP_OUT_x")
-        self.OCL_Object.buffer_global(self.partition_tau, "partition_tau")
-        self.OCL_Object.buffer_global(self.partition_x, "partition_x")
-        self.OCL_Object.buffer_global(self.counter_information_tau, "counter_information_tau")
-        self.OCL_Object.buffer_global(self.counter_information_x, "counter_information_x")
-        self.OCL_Object.buffer_global(self.counter_array_collision, "counter_array_collision")
-        self.OCL_Object.buffer_global(self.counter_array_collision_x, "counter_array_collision_x")
-        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter")
-        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter_x")
-        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter_collision_tau")
-        self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter_collision_x")
-        self.OCL_Object.buffer_local(self._local_id_0_s, 4, "counter_partition_tau")
-        self.OCL_Object.buffer_local(self._local_id_0_s, 4, "counter_partition_x")
-        #TESTING --------------------> LOCAL BUFFER TO REMOVE GLOBAL MEMORY
-        self.OCL_Object.buffer_local(self._dim_ang*self._local_id_2,4,"partition_t_local")
-        self.OCL_Object.buffer_local(self._dim_ang*self._local_id_2,4,"partition_x_local")
-
-    def kernel_execution_gen_whisker_map(self, lambda_offset_it, wait = None) -> cl.Event:
-        ev1 = self.OCL_Object.kernel.gen_whisker_map(self.OCL_Object.queue,
-                                            (self._g_size_0, self._g_size_1, self._g_size_2),
-                                            (self._local_id_0, self._local_id_1, self._local_id_2),
-                                            self.OCL_Object.initial_conditions_device,
-                                            self.OCL_Object.output_matrix_device,
-                                            self.OCL_Object.max_width_matrix_device,
-                                            self.OCL_Object.min_width_matrix_device,
-                                            self.OCL_Object.lambda_1_device,
-                                            self.OCL_Object.lambda_2_device, self.OCL_Object.v_device,
-                                            self.OCL_Object.initial_conditions_eta_device,
-                                            self.OCL_Object.omega_2_device, self._max_iter, self._dim_ang,
-                                            self._dim_y, self._lambda_1_range,
-                                            self.OCL_Object.half_device,
-                                            self.OCL_Object.mLCE_device,
-                                            self.OCL_Object.LCE_MAP_device,
-                                            self.OCL_Object.LCE_MAP_x_device,
-                                            _wpui(lambda_offset_it),
-                                            self.OCL_Object.partition_tau_device,
-                                            self.OCL_Object.partition_x_device,
-                                            self.OCL_Object.partition_t_local_device,
-                                            self.OCL_Object.partition_x_local_device,
-                                            #self._GWM_FLAG,
-                                            wait_for = None
->>>>>>> Stashed changes
                                             )
         #Wait for the evolution of the whisker map
         cl.wait_for_events([ev1])
@@ -440,7 +401,6 @@ def main():
                                                        _wpui(_dim_ensemble))
 
 
-<<<<<<< Updated upstream
         cl.wait_for_events([ev_shannon])
         print("Count * log (count) Shannon_entropy (Sum argument)")
         #Copy every value out from the GPU
@@ -451,148 +411,6 @@ def main():
         ev_collision_tau = cl.enqueue_copy(OCL_Object.queue, counter_array_collision, OCL_Object.counter_array_collision_device)
         ev_collision_x = cl.enqueue_copy(OCL_Object.queue, counter_array_collision_x, OCL_Object.counter_array_collision_x_device)
         cl.wait_for_events([ ev_copy_6, ev_copy_8, ev_inform_tau, ev_inform_x, ev_collision_tau, ev_collision_x ])
-=======
-    def kernel_execution_Shannon_entropy(self, wait = None) -> cl.Event:
-
-        groups_2 = _wpui(self._local_id_2)
-        ev_shannon = self.OCL_Object.kernel.Shannon_entropy(self.OCL_Object.queue,
-                                                       (self._g_size_0_t, self._g_size_1_t, self._g_size_2_t),
-                                                       (self._local_id_0_t, self._local_id_1_t, self._local_id_2_t),
-                                                       self.OCL_Object.partition_tau_device,
-                                                       self.OCL_Object.partition_x_device,
-                                                       self.OCL_Object.counter_partition_tau_device,
-                                                       self.OCL_Object.counter_partition_x_device,
-                                                       self.OCL_Object.counter_information_tau_device,
-                                                       self.OCL_Object.counter_information_x_device,
-                                                       _wpui(self._dim_ang),
-                                                       #_wpui(self._dim_ensemble),
-                                                       _wpui(self._dim_ensemble/self._local_id_0),
-                                                       groups_2,
-                                                        wait_for = wait)
-
-        return ev_shannon
-
-    def save_auxilliary_data_map(self, index_offset  : int) -> None:
-        for name in np.arange(self._lambda_1_range_map_out):
-            file_map = f"{self.directory}/map_\
-{self._lambda_1[index_offset*self._g_size_2 + name*int(self._g_size_2/self._lambda_1_range_map_out)]}.map"
-            file_map_x = f"{self.directory}/map_x_\
-{self._lambda_1[index_offset*self._g_size_2+ name*int(self._g_size_2/self._lambda_1_range_map_out)]}.map"
-
-            with open(file_map, "w") as file, open(file_map_x, "w") as file_x:
-                np.savetxt(file, self.MAP_OUT[:,:,name])
-                np.savetxt(file_x, self.MAP_OUT_x[:,:,name])
-
-    def save_auxilliary_data_collisions(self, index_offset : int, data : tuple) -> None:
-
-        col_step, col_step_x = data
-        file_collision = f"{self.directory}/collision_{self._lambda_1[index_offset*self._g_size_2]}.dat"
-        file_collision_x = f"{self.directory}/collision_x_{self._lambda_1[index_offset*self._g_size_2]}.dat"
-        with open(file_collision, "w") as file_col, open(file_collision_x, "w") as file_col_x:
-            np.savetxt(file_col, col_step)
-            np.savetxt(file_col_x, col_step_x)
-
-    def update_execution_events(self):
-        total_time = 0.
-        lambda_offset = _wpui(self._lambda_1_range/self._g_size_2)
-
-        for index_offset in np.arange(lambda_offset):
-            start_time = time.time()
-            print(f"Start time: {time.strftime('%H:%M:%S')}")
-            lambda_offset_it = _wpui(index_offset*self._g_size_2) #Iteration offset per chunk
-
-            ev1 = self.kernel_execution_gen_whisker_map(lambda_offset_it)
-            #Wait for the evolution of the whisker map
-            cl.wait_for_events([ev1])
-            print("First Kernel Finished")
-            ev_copy_map = self.kernel_execution_form_matrix_to_array(index_offset, [ev1])
-            cl.wait_for_events([ev_copy_map])
-            ev2 = self.kernel_execution_reduction(lambda_offset_it,[ev_copy_map])
-            cl.wait_for_events([ev2])
-            ev_shannon = self.kernel_execution_Shannon_entropy([ev2])
-
-            cl.wait_for_events([ev_shannon])
-            print("Count * log (count) Shannon_entropy (Sum argument)")
-            #Copy every value out from the GPU
-            ev_copy_6 = cl.enqueue_copy(self.OCL_Object.queue, self.counter_array,\
-                                        self.OCL_Object.counter_array_device)
-            ev_copy_8 = cl.enqueue_copy(self.OCL_Object.queue, self.counter_array_x,\
-                                        self.OCL_Object.counter_array_x_device)
-            ev_inform_tau = cl.enqueue_copy(self.OCL_Object.queue,\
-                                            self.counter_information_tau,\
-                                            self.OCL_Object.counter_information_tau_device)
-            ev_inform_x = cl.enqueue_copy(self.OCL_Object.queue,\
-                                          self.counter_information_x,\
-                                          self.OCL_Object.counter_information_x_device)
-            ev_collision_tau = cl.enqueue_copy(self.OCL_Object.queue,\
-                                               self.counter_array_collision,\
-                                               self.OCL_Object.counter_array_collision_device)
-            ev_collision_x = cl.enqueue_copy(self.OCL_Object.queue,\
-                                             self.counter_array_collision_x,\
-                                             self.OCL_Object.counter_array_collision_x_device)
-            cl.wait_for_events([ ev_copy_6, ev_copy_8, ev_inform_tau,\
-                                ev_inform_x, ev_collision_tau, ev_collision_x ])
-            #INFORMATION OF THE SHANNON ENTROPY******************************************************
-            info_tau = information_shannon_entropy(self._dim_ang, self._dim_ensemble,\
-                                                   self._max_iter, self.counter_information_tau)
-            info_x = information_shannon_entropy(self._dim_ang, self._dim_ensemble,\
-                                                 self._max_iter, self.counter_information_x)
-            #*******************************************************************************************
-            #Count of cells occupied********************************************************************
-            count = np.sum(self.counter_array, axis=0)
-            count_x = np.sum(self.counter_array_x, axis=0)
-
-            col_step = np.sum(self.counter_array_collision, axis = 0).astype(_wp) - self.CONSTANT_MAX_POINTS_ADDED
-            col_step_x = np.sum(self.counter_array_collision_x, axis = 0).astype(_wp) - self.CONSTANT_MAX_POINTS_ADDED
-
-            #*******************************************************************************************
-            # ACOMODATES ON VECTOR FOR HDD COPY AT THE END OF THE PROGRAM
-
-            low_index = index_offset*self._g_size_2_s
-            high_index = low_index + self._g_size_2_s
-            info_tau_re_shape = np.reshape(info_tau,(self._g_size_2_t,1))
-            info_x_re_shape = np.reshape(info_x,(self._g_size_2_t,1))
-            c_re_shape = np.reshape(count, (self._g_size_2_s, 1))
-            c_x_re_shape = np.reshape(count_x, (self._g_size_2_s, 1))
-            lambda_1_re_shape = np.reshape(self._lambda_1[low_index : high_index ], (self._g_size_2_s, 1))
-            lambda_2_re_shape = np.reshape(self._lambda_2[low_index : high_index], (self._g_size_2_s, 1))
-            v_re_shape = np.reshape(self.upsilon[low_index : high_index], (self._g_size_2_s, 1))
-            mu_re_shape = np.reshape(self.mu[low_index : high_index], (self._g_size_2_s, 1))
-            eta_re_shape = np.reshape(self.initial_conditions_eta[low_index : high_index], (self._g_size_2_s, 1))
-            v_stack = np.column_stack((lambda_1_re_shape,
-                                       lambda_2_re_shape,
-                                       v_re_shape,
-                                       mu_re_shape,
-                                       c_re_shape,
-                                       c_x_re_shape,
-                                       eta_re_shape,
-                                       info_tau_re_shape,
-                                       info_x_re_shape))
-
-            self.array_to_file[low_index: high_index ,:9] = v_stack #Set the results in the array output
-            #*********************************************************************************************
-            end_time = (time.time() - start_time)/3600 # Time estimate
-            total_time = total_time + end_time # Total time per chunk
-            print(f"Total time: {end_time}")
-
-            if self._save_maps:
-                ev_copy_MAP = cl.enqueue_copy(self.OCL_Object.queue, self.MAP_OUT , self.OCL_Object.MAP_OUT_device)
-                ev_copy_MAP_x = cl.enqueue_copy(self.OCL_Object.queue,\
-                                                self.MAP_OUT_x ,self.OCL_Object.MAP_OUT_x_device)
-                cl.wait_for_events([ev_copy_MAP, ev_copy_MAP_x])
-                self.save_auxilliary_data_map(index_offset)
-
-            if self._save_collisions:
-                self.save_auxilliary_data_collisions(index_offset, (col_step, col_step_x))
-
-        ev_copy_4 = cl.enqueue_copy(self.OCL_Object.queue, self.mLCE, self.OCL_Object.mLCE_device)
-        ev_copy_5 = cl.enqueue_copy(self.OCL_Object.queue, self.max_width_matrix , self.OCL_Object.max_width_matrix_device)
-        ev_copy_6 = cl.enqueue_copy(self.OCL_Object.queue, self.min_width_matrix , self.OCL_Object.min_width_matrix_device)
-        ev_copy_7 = cl.enqueue_copy(self.OCL_Object.queue, self.output_matrix , self.OCL_Object.output_matrix_device)
-        print("TOTAL_TIME: ", total_time)
-
-        cl.wait_for_events([ev_copy_4, ev_copy_5, ev_copy_6, ev_copy_7])
->>>>>>> Stashed changes
 
 
 
@@ -693,6 +511,7 @@ def main():
     OCL_Object.free_buffer("counter_array_collision_x_device")
     #*****************************************************************************************
 
+    #*****************************************************************************************
     #Statistics calculations
     #*****************************************************************************************
     _axis = 1
@@ -763,84 +582,4 @@ def main():
     save_output_to_file(array_to_file, file_name)
 
 if __name__ == '__main__':
-<<<<<<< Updated upstream
     main()
-=======
-    _dim_ensemble = 128
-    _common_gid_2_size = 128
-    _lambda_1_range_map_out = 1
-    index_value = _dim_ensemble
-    if index_value > 256: index_value = 256
-
-    map_aguments = {'iteration_time' : 10**7,
-                    'initial_condition_size' : _dim_ensemble,
-                    'free_parameter_size' : 1,
-                    'omega_2_size' : 1,
-                    'lambda_1_size' : 128,
-                    'lambda_1_ini' : _wp(5.0),
-                    'lambda_1_step' : _wp(0.01),
-                    'spread_from_center' : _wp(1.e-7),
-                    'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
-                    'gen_whisker_map' : True,
-                    'explicit_eta' : None,
-                    'pre_catched_eta' : True,
-                    'raster_size' : {'_dim_ang' : 2048,
-                                     '_dim_y' : 4096},
-                    'directory' : 'data',
-                    'map_out_lambda_range' : _lambda_1_range_map_out,
-                    'save_collisions' : False,
-                    'save_maps' : False,
-                    'first_kernel' : {'name' : None,
-                                      '_g_size_0' : int(_dim_ensemble),
-                                      '_g_size_1' : 1,
-                                      '_g_size_2' : _common_gid_2_size,
-                                      '_local_id_0' : 64,
-                                      '_local_id_1' : 1,
-                                      '_local_id_2' : 1,
-                                    },
-                    'copy_kernel' : {'name' : None,
-                                     '_g_size_0_c' : 128,
-                                     '_g_size_1_c' : 128,
-                                     '_g_size_2_c' : int(_lambda_1_range_map_out),
-                                     '_local_id_0_c' : 16,
-                                     '_local_id_1_c' : 16,
-                                     '_local_id_2_c' : 1
-                                     },
-                    'second_kernel' : {'name' : None,
-                                       '_g_size_0_s' : 128,
-                                       '_g_size_1_s' : 128,
-                                       '_g_size_2_s' : _common_gid_2_size,
-                                       '_local_id_0_s' : 16,
-                                       '_local_id_1_s' : 16,
-                                       '_local_id_2_s' : 1
-                                       },
-                    'third_kernel'  : {'name' : None,
-                                       '_g_size_0_t' : index_value,
-                                       '_g_size_1_t' : 1,
-                                       '_g_size_2_t' : _common_gid_2_size,
-                                       '_local_id_0_t' : index_value,
-                                       '_local_id_1_t' : 1,
-                                       '_local_id_2_t' : 1
-                                       }
-                    }
-    date = time.strftime('%d-%m-%Y__%H:%M:%S')
-    print(f"Start time: {date}")
-    STATUS = f"data/full_exec_wm_{date}_gwm_{map_aguments['gen_whisker_map']}_it_time_\
-{map_aguments['iteration_time']}_eta_size_\
-{map_aguments['free_parameter_size']}_ensemble_size_\
-{map_aguments['initial_condition_size']}.dat"
-
-
-    input_file = "./data/wm_eta_found_16-08-2026__09:22:37_gwm_True_it_time_1000000000_eta_size_1_ensemble_size_128.dat"
-    Experiment_execution_instance = Experiment_execution_full(STATUS, map_aguments)
-    Experiment_execution_instance.set_program_script('src/one_kernel_form.cl')
-    Experiment_execution_instance.set_file_as_initial_conditions(input_file)
-    start_time = time.time()
-    Experiment_execution_instance.create_device_buffers()
-    Experiment_execution_instance.update_execution_events()
-    Experiment_execution_instance.digest_statistics(STATUS, verbose=True)
-    Experiment_execution_instance.free_all_global_buffers()
-    end_time = (time.time() - start_time)/3600
-    print("Time elapsed: ", end_time)
-
->>>>>>> Stashed changes

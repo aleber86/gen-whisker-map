@@ -253,4 +253,44 @@ OCL_Object.program(['kernel_lambda_1.cl', 'src/jacobian.cl', 'src/modulus.cl'], 
 
 
 if __name__ == '__main__':
+<<<<<<< Updated upstream
     main()
+=======
+
+    map_aguments = {'iteration_time' : 10**7,
+                    'initial_condition_size' : 128,
+                    'free_parameter_size' : 1,
+                    'omega_2_size' : 1,
+                    'lambda_1_size' : 128,
+                    'lambda_1_ini' : _wp(5.0),
+                    'lambda_1_step' : _wp(0.01),
+                    'spread_from_center' : _wp(1.e-7),
+                    'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
+                    'gen_whisker_map' : True,
+                    'explicit_eta' : 4.852340625778730931e+00,
+                    'pre_catched_eta' : True
+                    }
+    opencl_arguments_structure = {'global_size' : (map_aguments['initial_condition_size'],
+                                                   1,
+                                                   map_aguments['lambda_1_size']),
+                                  'local_size' : (16,1,4)}
+    date = time.strftime('%d-%m-%Y__%H:%M:%S')
+    print(f"Start time: {date}")
+    STATUS = f"data/wm_eta_found_{date}_gwm_{map_aguments['gen_whisker_map']}_it_time_\
+{map_aguments['iteration_time']}_eta_size_\
+{map_aguments['free_parameter_size']}_ensemble_size_\
+{map_aguments['initial_condition_size']}.dat"
+
+
+    input_file = "./data/wm_eta_found_26-07-2026__17:35:23_gwm_False_it_time_100000000_eta_size_40_ensemble_size_128.dat"
+    Experiment_execution_instance = Experiment_execution_using_file(STATUS, map_aguments)
+    Experiment_execution_instance.set_program_script('src/kernel_lambda_1_form.cl')
+    Experiment_execution_instance.set_file_as_initial_conditions(input_file)
+    start_time = time.time()
+    Experiment_execution_instance.create_device_buffers()
+    Experiment_execution_instance.execute_experiment(opencl_arguments_structure)
+    Experiment_execution_instance.digest_statistics(verbose=True)
+    end_time = (time.time() - start_time)/3600
+    print("Time elapsed: ", end_time)
+    Experiment_execution_instance.save_raw_data()
+>>>>>>> Stashed changes
