@@ -206,8 +206,8 @@ class Experiment_execution_full(Experiment_execution):
         self.LCE_MAP = np.zeros(( self._g_size_2,self._dim_y,self._dim_ang), dtype = _wpui)
         self.LCE_MAP_x = np.zeros(( self._g_size_2,self._dim_y, self._dim_ang), dtype = _wpui)
         self.mLCE = np.zeros((self._lambda_1_range, self._dim_ensemble), dtype = _wp)
-        self.partition_tau = np.zeros((self._g_size_2_t, self._dim_ang, self._dim_ensemble), dtype = _wpui)
-        self.partition_x = np.zeros((self._g_size_2_t, self._dim_ang, self._dim_ensemble), dtype = _wpui)
+        self.partition_tau = np.zeros((self._g_size_2*self._local_id_2, self._dim_ang, int(self._dim_ensemble/self._local_id_0)), dtype = _wpui)
+        self.partition_x = np.zeros((self._g_size_2*self._local_id_2, self._dim_ang, int(self._dim_ensemble/self._local_id_0)), dtype = _wpui)
         self.counter_information_tau = np.zeros((self._dim_ang, self._g_size_2_t), dtype=_wp)
         self.counter_information_x = np.zeros((self._dim_ang, self._g_size_2_t), dtype=_wp)
         #WATCH OUT  !!!!!!!!
@@ -262,6 +262,8 @@ class Experiment_execution_full(Experiment_execution):
         self.OCL_Object.buffer_local(self._local_id_0_s*self._local_id_1_s, 4, "counter_collision_x")
         self.OCL_Object.buffer_local(self._local_id_0_s, 4, "counter_partition_tau")
         self.OCL_Object.buffer_local(self._local_id_0_s, 4, "counter_partition_x")
+        self.OCL_Object.buffer_local(self._dim_ang*self._local_id_2, 4, "partition_tau_local")
+        self.OCL_Object.buffer_local(self._dim_ang*self._local_id_2, 4, "partition_x_local")
 
     def kernel_execution_gen_whisker_map(self, lambda_offset_it, wait = None) -> cl.Event:
         ev1 = self.OCL_Object.kernel.gen_whisker_map(self.OCL_Object.queue,
@@ -283,6 +285,8 @@ class Experiment_execution_full(Experiment_execution):
                                             _wpui(lambda_offset_it),
                                             self.OCL_Object.partition_tau_device,
                                             self.OCL_Object.partition_x_device,
+                                            self.OCL_Object.partition_tau_local_device,
+                                            self.OCL_Object.partition_x_local_device,
                                             self._GWM_FLAG,
                                             wait_for = None
                                             )
@@ -343,7 +347,8 @@ class Experiment_execution_full(Experiment_execution):
                                                        self.OCL_Object.counter_information_tau_device,
                                                        self.OCL_Object.counter_information_x_device,
                                                        _wpui(self._dim_ang),
-                                                       _wpui(self._dim_ensemble),
+                                                       _wpui(self._dim_ensemble/self._local_id_0),
+                                                       _wpui(self._local_id_2),
                                                         wait_for = wait)
 
         return ev_shannon
@@ -571,12 +576,12 @@ if __name__ == '__main__':
                     'initial_condition_size' : _dim_ensemble,
                     'free_parameter_size' : 1,
                     'omega_2_size' : 1,
-                    'lambda_1_size' : 1536,
+                    'lambda_1_size' : 128,
                     'lambda_1_ini' : _wp(5.0),
                     'lambda_1_step' : _wp(0.01),
                     'spread_from_center' : _wp(1.e-7),
                     'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
-                    'gen_whisker_map' : False,
+                    'gen_whisker_map' : True,
                     'explicit_eta' : None,
                     'pre_catched_eta' : True,
                     'raster_size' : {'_dim_ang' : 2048,
@@ -589,7 +594,7 @@ if __name__ == '__main__':
                                       '_g_size_0' : int(_dim_ensemble),
                                       '_g_size_1' : 1,
                                       '_g_size_2' : _common_gid_2_size,
-                                      '_local_id_0' : 4,
+                                      '_local_id_0' : 64,
                                       '_local_id_1' : 1,
                                       '_local_id_2' : 4,
                                     },
@@ -626,7 +631,7 @@ if __name__ == '__main__':
 {map_aguments['initial_condition_size']}.dat"
 
 
-    input_file = "./data/resultados_640.dat"
+    input_file = "./data/resultado_64_el_wm.dat"
     Experiment_execution_instance = Experiment_execution_full(STATUS, map_aguments)
     Experiment_execution_instance.set_program_script('src/one_kernel_form.cl')
     Experiment_execution_instance.set_file_as_initial_conditions(input_file)
