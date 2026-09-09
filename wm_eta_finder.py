@@ -17,6 +17,9 @@ class Evolution_eta_finder:
         self._ONE_ETA_FLAG = _wpi(0)
         self._GWM_FLAG = _wpi(0)
         self._EXPLICIT_ETA = _wpi(1)
+        self._dim_y = _wpi(1)
+        self._dim_ang = _wpi(1)
+        self._FULL_POROSITY_COUNT = _wpi(0)
         self._max_iter = arguments['iteration_time']
         self._dim_ensemble = arguments['initial_condition_size']
         self._dim_eta = arguments['free_parameter_size']
@@ -29,6 +32,7 @@ class Evolution_eta_finder:
         self.is_gwm = arguments['gen_whisker_map']
         self.explicit_eta = arguments['explicit_eta']
         self.pre_catched_eta = arguments['pre_catched_eta']
+        self.full_porosity_count = arguments['full_porosity_count']
         self.__FLAGS()
         self._lambda_1 = self.set_lambda_1_initial_conditions()
         self.initial_conditions = self.set_initial_condition_xty()
@@ -45,6 +49,8 @@ class Evolution_eta_finder:
             self._ONE_ETA_FLAG = _wpi(1)
         if self.explicit_eta is None:
             self._EXPLICIT_ETA = _wpi(0)
+        if self.full_porosity_count:
+            self._FULL_POROSITY_COUNT = _wpi(1)
 
     def set_lambda_1_initial_conditions(self) -> np.array:
         lambda_1 = np.array([self._lambda_1_ini + self._step*lam for lam in np.arange(self._lambda_1_range)])
@@ -60,7 +66,8 @@ class Evolution_eta_finder:
     def set_initial_conditions_free_parameter(self):
 
         if self.explicit_eta is None:
-            initial_conditions_eta = np.random.uniform(0.01, 2.*_pi, size=self._dim_eta)
+            #initial_conditions_eta = np.random.uniform(0.01, 2.*_pi, size=self._dim_eta)
+            initial_conditions_eta = np.linspace(0.01, 2.*_pi, self._dim_eta, dtype=_wp)
             initial_conditions_eta[np.where(initial_conditions_eta<0.)] = \
                 initial_conditions_eta[np.where(initial_conditions_eta<0.)] + 2.*_pi
         else:
@@ -121,20 +128,33 @@ class Experiment_execution(Evolution_eta_finder):
 
     def set_program_script(self, program_form : str = 'src/kernel_lambda_1_form.cl',\
                            inculuded =['src/kernel_lambda_1.cl',\
-                                       'src/jacobian.cl', 'src/modulus.cl']) -> None:
+                                       'src/jacobian.cl', 'src/modulus.cl'],
+                           pre_compile : dict = None) -> None:
 
         with open(program_form, 'r') as file_to_change:
             script = file_to_change.read()
-            script = script.replace("#define MAXITER", f"#define MAXITER {self._max_iter}")
+        if not pre_compile is None:
+            for index, values in pre_compile.items():
+                script = script.replace(index, f"{index} {values}")
+                #script = script.replace("#define MAXITER", f"#define MAXITER {self._max_iter}")
+                #script = script.replace("#define FLAG_GWM", f"#define FLAG_GWM {self._GWM_FLAG}")
+                #script = script.replace("#define Y_OFFSET", f"#define FLAG_GWM {self._GWM_FLAG}")
+                #script = script.replace("#define FLAG_GWM", f"#define FLAG_GWM {self._GWM_FLAG}")
         with open('src/kernel_lambda_1.cl', 'w') as file:
             file.write(script)
-        self.OCL_Object.program(inculuded, ['-I ./includes'])
+        self.OCL_Object.program(inculuded, ['-I ./includes', f'-D MAXITER={self._max_iter}',
+                                            f'-D GWM_FLAG={self._GWM_FLAG}',
+                                            f'-D EXPLICIT_ETA={self._EXPLICIT_ETA}',
+                                            f'-D ONE_ETA_FLAG={self._ONE_ETA_FLAG}',
+                                            f'-D Y_OFFSET={int(self._dim_y/2)}',
+                                            f'-D DIM_ANG={self._dim_ang}',
+                                            f'-D DIM_Y={self._dim_y}',
+                                            f'-D FULL_POROSITY_COUNT={self._FULL_POROSITY_COUNT}'])
 
     def execute_experiment(self, opencl_arguments : dict) -> None:
         _global_size = opencl_arguments['global_size']
         _local_size = opencl_arguments['local_size']
 
-        _max_iter = _wpi(self._max_iter)
         ev_1 =self.OCL_Object.kernel.gen_whisker_map(self.OCL_Object.queue, _global_size, _local_size,
                                             self.OCL_Object.initial_conditions_device,
                                             self.OCL_Object.output_matrix_device,
@@ -144,11 +164,7 @@ class Experiment_execution(Evolution_eta_finder):
                                             self.OCL_Object.lambda_2_device,
                                             self.OCL_Object.v_device,
                                             self.OCL_Object.initial_conditions_eta_device,
-                                            self.OCL_Object.omega_2_device, _max_iter,
-                                            self.OCL_Object.mu_device,
-                                            self._GWM_FLAG,
-                                            self._ONE_ETA_FLAG,
-                                            self._EXPLICIT_ETA)
+                                            self.OCL_Object.omega_2_device)
         cl.wait_for_events([ev_1])
         ev_copy_1 = cl.enqueue_copy(self.OCL_Object.queue,\
                         self.output_mLCE_matrix, self.OCL_Object.output_matrix_device)
@@ -236,15 +252,15 @@ class Experiment_execution(Evolution_eta_finder):
         #
 
 if __name__ == '__main__':
-    map_aguments = {'iteration_time' : 10**7,
-                    'initial_condition_size' : 256,
-                    'free_parameter_size' : 40,
+    map_aguments = {'iteration_time' : 10**6,
+                    'initial_condition_size' : 128,
+                    'free_parameter_size' : 128,
                     'omega_2_size' : 1,
-                    'lambda_1_size' : 1536,
+                    'lambda_1_size' : 128,
                     'lambda_1_ini' : _wp(5.0),
                     'lambda_1_step' : _wp(0.01),
                     'spread_from_center' : _wp(1.e-7),
-                    'omega_2_initial_condition' : _wp(np.sqrt(1.7)),
+                    'omega_2_initial_condition' : _wp(np.sqrt(2.5)),
                     'gen_whisker_map' : False,
                     'explicit_eta' : None,
                     'pre_catched_eta' : False,
@@ -252,7 +268,7 @@ if __name__ == '__main__':
     opencl_arguments_structure = {'global_size' : (map_aguments['initial_condition_size'],
                                                    map_aguments['free_parameter_size'],
                                                    map_aguments['lambda_1_size']),
-                                  'local_size' : (4,4,4)}
+                                  'local_size' : (8,8,4)}
     date = time.strftime('%d-%m-%Y__%H:%M:%S')
     omega_2 = ""
     if map_aguments['gen_whisker_map'] : omega_2 = f"_{map_aguments['omega_2_initial_condition']}"
@@ -264,6 +280,10 @@ if __name__ == '__main__':
 
     Experiment_execution_instance = Experiment_execution(STATUS, arguments_of_the_map=map_aguments)
     Experiment_execution_instance.set_program_script('src/kernel_lambda_1_form.cl')
+                                                     #pre_compile = {"#define MAXITER": map_aguments["iteration_time"],
+                                                     #               "#define GWM_FLAG" : int(map_aguments["gen_whisker_map"]),
+                                                     #               "#define EXPLICIT_ETA" : 1 if map_aguments["explicit_eta"]  else 0,
+                                                     #               "#define ONE_ETA_FLAG" : int(map_aguments["pre_catched_eta"])})
     start_time = time.time()
     Experiment_execution_instance.create_device_buffers()
     Experiment_execution_instance.execute_experiment(opencl_arguments_structure)

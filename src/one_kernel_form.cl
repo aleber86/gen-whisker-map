@@ -3,8 +3,9 @@
 
 #include"jacobian.h"
 #include"modulus.h"
-#define MAXITER
 
+#define MAXITER 
+#define GWM_FLAG 1
 
 void index_finder(int offset, double spread_value, 
         double coordenate, int array_dimension, uint *index_found){
@@ -28,35 +29,41 @@ void index_finder(int offset, double spread_value,
 }
 
 __kernel void gen_whisker_map(
-        __constant  double *initial_conditions, 
-        __global double *output_matrix, 
-        __global double *max_width_matrix,
-        __global double *min_width_matrix,
-        __global double *lambda_1_arr,
-        __global double *lambda_2,
-        __constant  double *v, 
-        __constant  double *eta,
-        __constant  double* omega_2, 
-        uint dimension,
+        __constant  double *restrict initial_conditions, 
+        __global double *restrict output_matrix, 
+        __global double *restrict max_width_matrix,
+        __global double *restrict min_width_matrix,
+        __global double *restrict lambda_1_arr,
+        __global double *restrict lambda_2,
+        __constant  double *restrict v, 
+        __constant  double *restrict eta,
+        __constant  double *restrict omega_2, 
+        //uint dimension,
         uint dim_ang,
         uint dim_y,
-        uint dimension_sample,
-        __constant  double *_half,
-        __global double *mLCE,
+        //uint dimension_sample,
+        __constant  double *restrict _half,
+        __global double *restrict mLCE,
         __global uint *LCE_MAP,
         __global uint *LCE_MAP_x,
+        __global uint *restrict partition_y,
         uint offset_lambda,
-        __global uint *partition_tau,
-        __global uint *partition_x,
+        __global uint *restrict partition_tau,
+        __global uint *restrict partition_x,
         __local uint *partition_tau_local,
         __local uint *partition_x_local,
-        uint flag_gwm){
+        __local uint *partition_y_local){
+        //uint GWM_FLAG){
 
+    /**
+     * @brief OpenCL kernel that calculates a Generalized Whisker Map.
+     * @param initial_conditions an Input buffer in global memory
+     * @param output_matrix an Output buffer in global memory
+     * @return void
+     */
 
     uint gid_0 = get_global_id(0);
     uint gsz_0 = get_global_size(0);
-    uint gid_1 = get_global_id(1);
-    uint gsz_1 = get_global_size(1);
     uint gid_2 = get_global_id(2);
     uint gsz_2 = get_global_size(2);
     uint lid_0 = get_local_id(0);
@@ -66,16 +73,20 @@ __kernel void gen_whisker_map(
     uint grp_id_0 = get_group_id(0);
     uint grp_sz_0 = get_num_groups(0);
     uint LOCAL_SIZE = (uint)(dim_ang/lsz_0);
+    uint LOCAL_SIZE_y = (uint)(dim_y/lsz_0);
 
-    if(gid_0 >= gsz_0 || gid_1 >= gsz_1 || gid_2>= gsz_2) return;
+    if(gid_0 >= gsz_0 || 
+            gid_2>= gsz_2) return;
 
     for(uint index_local = 0; index_local<LOCAL_SIZE; index_local++){
         partition_tau_local[lid_2*dim_ang + lid_0*LOCAL_SIZE + index_local] = 0;
-        if(flag_gwm){
+        if(GWM_FLAG){
             partition_x_local[lid_2*dim_ang + lid_0*LOCAL_SIZE + index_local] = 0;
         }
 
     }
+    for(uint index_local = 0; index_local<LOCAL_SIZE_y; index_local++)
+        partition_y_local[lid_2*dim_ang + lid_0*LOCAL_SIZE_y + index_local] = 0;
     barrier(CLK_LOCAL_MEM_FENCE);
 
     uint index_global = gid_2 + offset_lambda ;
@@ -86,9 +97,8 @@ __kernel void gen_whisker_map(
     uint angular, angular_x, y_wide; 
     double ang = dpi/(double)dim_ang, y_scale = 2.*_half[index_global]/(double)dim_y; 
     int y_offset = (int)(dim_y / 2);
-    uint index_buff_c, index_buff_c_x;
-        //, index_buff_p, index_buff_p_x;
-    if(flag_gwm==0){
+    //uint index_buff_c, index_buff_c_x, index_buff_p, index_buff_p_x;
+    if(GWM_FLAG==0){
         x = (double) 0.;
         v_element = (double) 0.;
         omega_2_element = (double)0.;
@@ -115,15 +125,15 @@ __kernel void gen_whisker_map(
     //WATCHOUT! CONDITIONS FOR WM:
     __private double const inv_lambda_1 = (double)1./lambda_1;
     double log_f_y;
-    tangent = (double3)(sin((double)(gid_0 + gsz_1)), 
-                            cos((double)(gid_1 + gsz_0)), 
-                            tan((double)(gid_1 + gsz_1)));
+    tangent = (double3)(sin((double)(gid_0 + gsz_0)), 
+                            cos((double)(gid_2 + gsz_0)), 
+                            tan((double)(gid_0 + gsz_2)));
     for (long i = 1; i < MAXITER+1; i++){
         y = y + inv_lambda_1* sin(t) - v_element*inv_lambda_1 * cos(x);
         log_f_y = log(fabs(y)); //<-----------------This register will change bellow!
         t = t - lambda_1 * log_f_y +   eta_element;
         //WATCHOUT CONDITIONS FOR WM:
-        if(flag_gwm==1){
+        if(GWM_FLAG==1){
             x = x - lambda_2_element* log_f_y + omega_2_element*eta_element;
             x = modulus(x, dpi);
         }
@@ -153,19 +163,20 @@ __kernel void gen_whisker_map(
         if (min_width >= y){
             min_width = y;
         }
-            index_buff_c = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular));
+            //index_buff_c = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular));
             //index_buff_p = (uint)((gid_2*dim_ang + angular)*gsz_0 + gid_0);
-            atom_add(LCE_MAP+index_buff_c,1);
+//            atom_add(LCE_MAP+index_buff_c,1);
             atom_add(partition_tau_local + lid_2*dim_ang + angular,1 );
+            atom_add(partition_y_local + lid_2*dim_ang + y_wide, 1);
             //LCE_MAP[index_buff_c] ++ ;
             //partition_tau[index_buff_p] ++;
-            if(flag_gwm == 1){
+            if(GWM_FLAG){
                 //Find x index
                 index_finder(0, ang, x, dim_ang, &angular_x);
-                index_buff_c_x = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular_x));
+                //index_buff_c_x = (uint)(((gid_2*dim_y + y_wide )*dim_ang + angular_x));
                 //index_buff_p_x = (uint)((gid_2*dim_ang + angular_x)*gsz_0 + gid_0);
                 //LCE_MAP_x[index_buff_c_x] ++;
-                atom_add(LCE_MAP_x + index_buff_c_x, 1);
+//                atom_add(LCE_MAP_x + index_buff_c_x, 1);
                 atom_add(partition_x_local + lid_2*dim_ang + angular_x, 1);
                 //partition_x[index_buff_p_x] ++;
             }
@@ -179,16 +190,18 @@ __kernel void gen_whisker_map(
     max_width_matrix[index_global] = max_width;
     min_width_matrix[index_global] = min_width;
     barrier(CLK_LOCAL_MEM_FENCE);
+    
     for(uint index_local = 0; index_local<LOCAL_SIZE; index_local++){
         partition_tau[((gid_2*lsz_2+lid_2)*dim_ang + lid_0*LOCAL_SIZE + index_local)*grp_sz_0 + grp_id_0] = partition_tau_local[lid_2*dim_ang + lid_0*LOCAL_SIZE + index_local];
-        printf("%u", partition_tau[((gid_2*lsz_2+lid_2)*dim_ang + lid_0*LOCAL_SIZE + index_local)*grp_sz_0 + grp_id_0]);
-        if(flag_gwm){
+        if(GWM_FLAG){
             partition_x[((gid_2*lsz_2+lid_2)*dim_ang + lid_0*LOCAL_SIZE + index_local)*grp_sz_0 + grp_id_0] = partition_x_local[lid_2*dim_ang + lid_0*LOCAL_SIZE + index_local];
         }
 
 
 }
-barrier(CLK_LOCAL_MEM_FENCE);
+    for(uint index_local = 0; index_local<LOCAL_SIZE_y; index_local++){
+        partition_y[((gid_2*lsz_2+lid_2)*dim_ang + lid_0*LOCAL_SIZE_y + index_local)*grp_sz_0 + grp_id_0] = partition_y_local[lid_2*dim_ang + lid_0*LOCAL_SIZE + index_local];
+    }
 
 }
 
@@ -315,6 +328,8 @@ __kernel void Shannon_entropy(__global uint *partition_tau,
     for(uint j = gid_0; j<partition_size; j+=gsz_0){
     double counter = 0.;
     double counter_x = 0.;
+    //double porosity = 0.; //ADDED BE AWARE
+    //uint c_counter = 0;
     counter_information_tau[j*gsz_2 + gid_2] = 0;
     counter_information_x[j*gsz_2 + gid_2] = 0;
         for(uint i = 0; i<group_1; i++){
@@ -329,6 +344,10 @@ __kernel void Shannon_entropy(__global uint *partition_tau,
             partition_x[((gid_2*group_2+k) * partition_size + j) * group_1 + i ] = 0;
             }
         }
+        //if(counter*partition_size/(MAXITER*128)<=0.9){
+        //    c_counter++;
+        //    printf("%u", c_counter);
+        //}
     if(counter!=0){
         counter_information_tau[j*gsz_2 + gid_2] = counter * log(counter);
     }
