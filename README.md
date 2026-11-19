@@ -6,7 +6,7 @@ Tested on AMD ISA RDNA 2.0 (GPU: Navi 22) and GCN 5.1 (GPU: Vega 20).
 
 
 ## About The Code  
-*What this code does?* It calculates the evolution of an ensamble of initial conditions within the chaoctic layer (or stochastic layer) to get the half-width, metric entropy (KS-entropy), mLCE (maximal Lyapunov Caracteristic Exponent), and porosity of the layer.  
+*What this code does?* It calculates the evolution of an ensemble of initial conditions within the chaoctic layer (or stochastic layer) to get the half-width, metric entropy (KS-entropy), mLCE (maximal Lyapunov Characteristic Exponent), and porosity of the layer.  
   
 *How this attributes are calculated?* In a general manner, the equations that describes the dynamical system are iterated and in every step this attributes are calculated for every element in an ensamble of initial conditions. Let's see it in more detail.  
   
